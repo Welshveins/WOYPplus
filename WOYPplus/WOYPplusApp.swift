@@ -1,32 +1,19 @@
-//
-//  WOYPplusApp.swift
-//  WOYPplus
-//
-//  Created by Chris Davies on 12/02/2026.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct WOYPplusApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(for: [
+            Day.self,
+            Entry.self,
+            Recipe.self,
+            RecipeIngredient.self,
+            ExtrasPreset.self
+        ])
     }
 }
