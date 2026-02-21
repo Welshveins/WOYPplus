@@ -2,15 +2,23 @@ import SwiftUI
 import SwiftData
 
 struct TodayView: View {
-    
-    
+
     @Environment(\.modelContext) private var ctx
 
     @Query(sort: \Day.date, order: .reverse) private var days: [Day]
     @Query(sort: \Entry.createdAt, order: .reverse) private var entries: [Entry]
 
+    // Sheets / flows
     @State private var showingPlateSheet = false
     @State private var showingExtrasSheet = false
+
+    @State private var showingRecipeSlotPicker = false
+    @State private var recipeTargetSlot: MealSlot = .snacks
+    @State private var showingRecipeLibrary = false
+
+    @State private var showingQuickAddSlotPicker = false
+    @State private var quickAddTargetSlot: MealSlot = .snacks
+    @State private var showingQuickAddSheet = false
 
     private var todayStart: Date { Day.startOfDay(for: Date()) }
 
@@ -73,9 +81,6 @@ struct TodayView: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
-                .task {
-                    ExtrasSeeder.seedIfNeeded(ctx: ctx)
-                }
                 .padding(.top, 10)
 
                 // Macro Ring
@@ -121,7 +126,7 @@ struct TodayView: View {
                     RangeView()
                 } label: {
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.woypSlate.opacity(0.58)) // your preferred TodayView pill opacity
+                        .fill(Color.woypSlate.opacity(0.58))
                         .frame(height: 20)
                         .overlay(
                             Text("Range guide")
@@ -131,6 +136,21 @@ struct TodayView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 4)
+
+                // Actions grid (2 × 2)
+                ActionsGrid(
+                    onYourPlate: { showingPlateSheet = true },
+                    onRecipe: {
+                        recipeTargetSlot = .snacks
+                        showingRecipeSlotPicker = true
+                    },
+                    onQuickAdd: {
+                        quickAddTargetSlot = .snacks
+                        showingQuickAddSlotPicker = true
+                    },
+                    onExtras: { showingExtrasSheet = true }
+                )
+                .padding(.top, 6)
 
                 // Meals
                 VStack(spacing: 12) {
@@ -163,29 +183,6 @@ struct TodayView: View {
                         entries: entriesForToday(slot: .snacks)
                     )
                 }
-                .padding(.top, 4)
-
-                // Actions
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Actions")
-                        .font(.headline)
-
-                    HStack(spacing: 10) {
-
-                        ActionTile(title: "Your plate", systemImage: "camera") {
-                            showingPlateSheet = true
-                        }
-
-                        ActionTile(title: "Add recipe", systemImage: "plus") {
-                            // placeholder for recipe create flow
-                        }
-
-                        // ✅ Extras lives here (packaged items quick log)
-                        ActionTile(title: "Extras", systemImage: "cube") {
-                            showingExtrasSheet = true
-                        }
-                    }
-                }
                 .padding(.top, 6)
 
                 Spacer(minLength: 18)
@@ -193,19 +190,58 @@ struct TodayView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
-        // ✅ soft slate background for light mode too (instead of bright white)
-        .background(Color.woypSlate.opacity(0.15))
+        .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
+        .task {
+            ExtrasSeeder.seedIfNeeded(ctx: ctx)
+        }
+
+        // Sheets (top-level)
         .sheet(isPresented: $showingPlateSheet) {
             AddPlateSheet(day: day)
         }
         .sheet(isPresented: $showingExtrasSheet) {
-            // This assumes your existing sheet takes (day: Day).
-            // If your ExtrasQuickLogSheet initializer is different, tell me what it is and I’ll adjust.
             ExtrasQuickLogSheet(day: day)
         }
+
+        // Recipe: choose slot, then show library
+        .confirmationDialog(
+            "Log recipe to…",
+            isPresented: $showingRecipeSlotPicker,
+            titleVisibility: .visible
+        ) {
+            Button("Breakfast") { recipeTargetSlot = .breakfast; showingRecipeLibrary = true }
+            Button("Lunch")     { recipeTargetSlot = .lunch;     showingRecipeLibrary = true }
+            Button("Dinner")    { recipeTargetSlot = .dinner;    showingRecipeLibrary = true }
+            Button("Snacks")    { recipeTargetSlot = .snacks;    showingRecipeLibrary = true }
+            Button("Cancel", role: .cancel) { }
+        }
+        .sheet(isPresented: $showingRecipeLibrary) {
+            NavigationStack {
+                RecipeLibraryView(day: day, mealSlot: recipeTargetSlot)
+            }
+        }
+
+        // Quick Add: choose slot, then open quick add flow
+        .confirmationDialog(
+            "Quick add to…",
+            isPresented: $showingQuickAddSlotPicker,
+            titleVisibility: .visible
+        ) {
+            Button("Breakfast") { quickAddTargetSlot = .breakfast; showingQuickAddSheet = true }
+            Button("Lunch")     { quickAddTargetSlot = .lunch;     showingQuickAddSheet = true }
+            Button("Dinner")    { quickAddTargetSlot = .dinner;    showingQuickAddSheet = true }
+            Button("Snacks")    { quickAddTargetSlot = .snacks;    showingQuickAddSheet = true }
+            Button("Cancel", role: .cancel) { }
+        }
+        .sheet(isPresented: $showingQuickAddSheet) {
+            NavigationStack {
+                // If your project uses a different entry point name, this is the one line to change.
+                QuickAddSheet(day: day, mealSlot: quickAddTargetSlot)
+            }
+        }
+
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // Import / Export entry point
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     DataBackupView()
@@ -219,6 +255,74 @@ struct TodayView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+}
+
+////////////////////////////////////////////////////////////
+/// MARK: - Actions Grid
+////////////////////////////////////////////////////////////
+
+private struct ActionsGrid: View {
+
+    let onYourPlate: () -> Void
+    let onRecipe: () -> Void
+    let onQuickAdd: () -> Void
+    let onExtras: () -> Void
+
+    private let cols = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: cols, spacing: 12) {
+            ActionTileRow(title: "Your plate", systemImage: "camera", action: onYourPlate)
+            ActionTileRow(title: "Recipe", systemImage: "fork.knife", action: onRecipe)
+            ActionTileRow(title: "Quick add", systemImage: "barcode.viewfinder", action: onQuickAdd)
+            ActionTileRow(title: "Extras", systemImage: "cube", action: onExtras)
+        }
+    }
+}
+
+private struct ActionTileRow: View {
+
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 20, weight: .semibold))
+                    .frame(width: 30)
+                    .foregroundStyle(.primary)
+
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.60)
+                    .allowsTightening(true)
+                    .layoutPriority(1)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color.woypSlate.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -302,7 +406,6 @@ private struct MealRow: View {
     let entries: [Entry]
 
     var body: some View {
-
         NavigationLink {
             MealDetailView(day: day, mealSlot: mealSlot, title: title)
         } label: {
@@ -338,41 +441,6 @@ private struct MealRow: View {
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.woypSlate.opacity(0.06))
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-////////////////////////////////////////////////////////////
-/// MARK: - Action Tile
-////////////////////////////////////////////////////////////
-
-private struct ActionTile: View {
-
-    let title: String
-    let systemImage: String
-    let action: () -> Void
-
-    var body: some View {
-
-        Button(action: action) {
-
-            VStack(spacing: 8) {
-
-                Image(systemName: systemImage)
-                    .font(.title2)
-
-                Text(title)
-                    .font(.subheadline).bold()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.9)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.woypSlate.opacity(0.08))
             )
         }
         .buttonStyle(.plain)
