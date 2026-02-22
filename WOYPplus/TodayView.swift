@@ -193,6 +193,7 @@ struct TodayView: View {
         .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
         .task {
             ExtrasSeeder.seedIfNeeded(ctx: ctx)
+            RecipeSeeder.seedIfNeeded(ctx: ctx)
         }
 
         // Sheets (top-level)
