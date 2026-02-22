@@ -1,0 +1,51 @@
+{
+  "categoryRaw" : "Dinner",
+  "ingredients" : [
+    {
+      "amountGrams" : 300,
+      "carbsPer100g" : 0.1,
+      "fatPer100g" : 1.1,
+      "fibrePer100g" : 0.05,
+      "kcalPer100g" : 90,
+      "name" : "Fish mix",
+      "proteinPer100g" : 20.3
+    },
+    {
+      "amountGrams" : 280,
+      "carbsPer100g" : 26.65,
+      "fatPer100g" : 0.4,
+      "fibrePer100g" : 1.33,
+      "kcalPer100g" : 137.83,
+      "name" : "Potato (boiled)",
+      "proteinPer100g" : 3.05
+    },
+    {
+      "amountGrams" : 100,
+      "carbsPer100g" : 3.49,
+      "fatPer100g" : 0.31,
+      "fibrePer100g" : 3,
+      "kcalPer100g" : 23.41,
+      "name" : "Spinach (raw)",
+      "proteinPer100g" : 2.67
+    },
+    {
+      "amountGrams" : 120,
+      "carbsPer100g" : 4.8,
+      "fatPer100g" : 14.3,
+      "fibrePer100g" : 0.5,
+      "kcalPer100g" : 161,
+      "name" : "Reduced Fat Crème Fraîche",
+      "proteinPer100g" : 2.9
+    },
+    {
+      "amountGrams" : 140,
+      "carbsPer100g" : 9.3,
+      "kcalPer100g" : 75,
+      "name" : "Sweetcorn",
+      "proteinPer100g" : 2.8
+    }
+  ],
+  "name" : "Fish curry",
+  "servings" : 4,
+  "version" : 1
+}

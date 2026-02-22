@@ -16,10 +16,6 @@ struct TodayView: View {
     @State private var recipeTargetSlot: MealSlot = .snacks
     @State private var showingRecipeLibrary = false
 
-    @State private var showingQuickAddSlotPicker = false
-    @State private var quickAddTargetSlot: MealSlot = .snacks
-    @State private var showingQuickAddSheet = false
-
     private var todayStart: Date { Day.startOfDay(for: Date()) }
 
     private var todayString: String {
@@ -71,7 +67,6 @@ struct TodayView: View {
 
             VStack(spacing: 18) {
 
-                // Header
                 VStack(spacing: 6) {
                     Text("Today")
                         .font(.system(size: 34, weight: .semibold))
@@ -82,8 +77,11 @@ struct TodayView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 10)
+                .task {
+                    ExtrasSeeder.seedIfNeeded(ctx: ctx)
+                    RecipeSeeder.seedIfNeeded(ctx: ctx)
+                }
 
-                // Macro Ring
                 NavigationLink {
                     TrendView()
                 } label: {
@@ -91,12 +89,8 @@ struct TodayView: View {
                         let size = min(geo.size.width * 0.72, 260)
 
                         ZStack {
-                            MacroRingView(
-                                carbs: t.carbs,
-                                protein: t.protein,
-                                fat: t.fat
-                            )
-                            .frame(width: size, height: size)
+                            MacroRingView(carbs: t.carbs, protein: t.protein, fat: t.fat)
+                                .frame(width: size, height: size)
 
                             if day.hasEstimates {
                                 Text("*")
@@ -105,23 +99,15 @@ struct TodayView: View {
                                     .offset(x: size * 0.28, y: -size * 0.28)
                             }
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(height: 300)
                 }
                 .buttonStyle(.plain)
 
-                // Stats row
-                MacroStatsRow(
-                    kcal: t.kcal,
-                    carbs: t.carbs,
-                    protein: t.protein,
-                    fat: t.fat,
-                    fibre: t.fibre
-                )
-                .padding(.top, 2)
+                MacroStatsRow(kcal: t.kcal, carbs: t.carbs, protein: t.protein, fat: t.fat, fibre: t.fibre)
+                    .padding(.top, 2)
 
-                // Range guide pill
                 NavigationLink {
                     RangeView()
                 } label: {
@@ -137,51 +123,35 @@ struct TodayView: View {
                 .buttonStyle(.plain)
                 .padding(.top, 4)
 
-                // Actions grid (2 × 2)
-                ActionsGrid(
-                    onYourPlate: { showingPlateSheet = true },
-                    onRecipe: {
-                        recipeTargetSlot = .snacks
-                        showingRecipeSlotPicker = true
-                    },
-                    onQuickAdd: {
-                        quickAddTargetSlot = .snacks
-                        showingQuickAddSlotPicker = true
-                    },
-                    onExtras: { showingExtrasSheet = true }
-                )
-                .padding(.top, 6)
-
                 // Meals
                 VStack(spacing: 12) {
+                    MealRow(title: "Breakfast", day: day, mealSlot: .breakfast, entries: entriesForToday(slot: .breakfast))
+                    MealRow(title: "Lunch", day: day, mealSlot: .lunch, entries: entriesForToday(slot: .lunch))
+                    MealRow(title: "Dinner", day: day, mealSlot: .dinner, entries: entriesForToday(slot: .dinner))
+                    MealRow(title: "Snacks", day: day, mealSlot: .snacks, entries: entriesForToday(slot: .snacks))
+                }
+                .padding(.top, 4)
 
-                    MealRow(
-                        title: "Breakfast",
-                        day: day,
-                        mealSlot: .breakfast,
-                        entries: entriesForToday(slot: .breakfast)
-                    )
+                // Actions
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Actions")
+                        .font(.headline)
 
-                    MealRow(
-                        title: "Lunch",
-                        day: day,
-                        mealSlot: .lunch,
-                        entries: entriesForToday(slot: .lunch)
-                    )
+                    HStack(spacing: 10) {
 
-                    MealRow(
-                        title: "Dinner",
-                        day: day,
-                        mealSlot: .dinner,
-                        entries: entriesForToday(slot: .dinner)
-                    )
+                        ActionTile(title: "Your plate", systemImage: "camera") {
+                            showingPlateSheet = true
+                        }
 
-                    MealRow(
-                        title: "Snacks",
-                        day: day,
-                        mealSlot: .snacks,
-                        entries: entriesForToday(slot: .snacks)
-                    )
+                        ActionTile(title: "Recipe", systemImage: "fork.knife") {
+                            recipeTargetSlot = .snacks
+                            showingRecipeSlotPicker = true
+                        }
+
+                        ActionTile(title: "Extras", systemImage: "cube") {
+                            showingExtrasSheet = true
+                        }
+                    }
                 }
                 .padding(.top, 6)
 
@@ -191,11 +161,7 @@ struct TodayView: View {
             .padding(.bottom, 24)
         }
         .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
-        .task {
-            ExtrasSeeder.seedIfNeeded(ctx: ctx)
-        }
 
-        // Sheets (top-level)
         .sheet(isPresented: $showingPlateSheet) {
             AddPlateSheet(day: day)
         }
@@ -203,7 +169,6 @@ struct TodayView: View {
             ExtrasQuickLogSheet(day: day)
         }
 
-        // Recipe: choose slot, then show library
         .confirmationDialog(
             "Log recipe to…",
             isPresented: $showingRecipeSlotPicker,
@@ -218,25 +183,6 @@ struct TodayView: View {
         .sheet(isPresented: $showingRecipeLibrary) {
             NavigationStack {
                 RecipeLibraryView(day: day, mealSlot: recipeTargetSlot)
-            }
-        }
-
-        // Quick Add: choose slot, then open quick add flow
-        .confirmationDialog(
-            "Quick add to…",
-            isPresented: $showingQuickAddSlotPicker,
-            titleVisibility: .visible
-        ) {
-            Button("Breakfast") { quickAddTargetSlot = .breakfast; showingQuickAddSheet = true }
-            Button("Lunch")     { quickAddTargetSlot = .lunch;     showingQuickAddSheet = true }
-            Button("Dinner")    { quickAddTargetSlot = .dinner;    showingQuickAddSheet = true }
-            Button("Snacks")    { quickAddTargetSlot = .snacks;    showingQuickAddSheet = true }
-            Button("Cancel", role: .cancel) { }
-        }
-        .sheet(isPresented: $showingQuickAddSheet) {
-            NavigationStack {
-                // If your project uses a different entry point name, this is the one line to change.
-                QuickAddSheet(day: day, mealSlot: quickAddTargetSlot)
             }
         }
 
@@ -258,80 +204,7 @@ struct TodayView: View {
     }
 }
 
-////////////////////////////////////////////////////////////
-/// MARK: - Actions Grid
-////////////////////////////////////////////////////////////
-
-private struct ActionsGrid: View {
-
-    let onYourPlate: () -> Void
-    let onRecipe: () -> Void
-    let onQuickAdd: () -> Void
-    let onExtras: () -> Void
-
-    private let cols = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
-
-    var body: some View {
-        LazyVGrid(columns: cols, spacing: 12) {
-            ActionTileRow(title: "Your plate", systemImage: "camera", action: onYourPlate)
-            ActionTileRow(title: "Recipe", systemImage: "fork.knife", action: onRecipe)
-            ActionTileRow(title: "Quick add", systemImage: "barcode.viewfinder", action: onQuickAdd)
-            ActionTileRow(title: "Extras", systemImage: "cube", action: onExtras)
-        }
-    }
-}
-
-private struct ActionTileRow: View {
-
-    let title: String
-    let systemImage: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-
-                Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(width: 30)
-                    .foregroundStyle(.primary)
-
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.60)
-                    .allowsTightening(true)
-                    .layoutPriority(1)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.woypSlate.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-////////////////////////////////////////////////////////////
-/// MARK: - Stats Row
-////////////////////////////////////////////////////////////
-
 private struct MacroStatsRow: View {
-
     let kcal: Double
     let carbs: Double
     let protein: Double
@@ -340,13 +213,10 @@ private struct MacroStatsRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-
             StatCell(label: "kcal", value: formatInt(kcal), valueColor: .secondary, showG: false)
-
             StatCell(label: "C", value: formatInt(carbs), valueColor: .woypSand, showG: true)
             StatCell(label: "P", value: formatInt(protein), valueColor: .woypTeal, showG: true)
             StatCell(label: "F", value: formatInt(fat), valueColor: .woypTerracotta, showG: true)
-
             StatCell(label: "Fibre", value: formatInt(fibre), valueColor: .secondary, showG: true)
         }
         .frame(maxWidth: .infinity)
@@ -361,7 +231,6 @@ private struct MacroStatsRow: View {
 }
 
 private struct StatCell: View {
-
     let label: String
     let value: String
     let valueColor: Color
@@ -369,7 +238,6 @@ private struct StatCell: View {
 
     var body: some View {
         VStack(spacing: 4) {
-
             Text(label)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(labelColor)
@@ -394,12 +262,7 @@ private struct StatCell: View {
     }
 }
 
-////////////////////////////////////////////////////////////
-/// MARK: - Meal Row
-////////////////////////////////////////////////////////////
-
 private struct MealRow: View {
-
     let title: String
     let day: Day
     let mealSlot: MealSlot
@@ -409,7 +272,6 @@ private struct MealRow: View {
         NavigationLink {
             MealDetailView(day: day, mealSlot: mealSlot, title: title)
         } label: {
-
             VStack(alignment: .leading, spacing: 6) {
 
                 HStack {
@@ -427,9 +289,7 @@ private struct MealRow: View {
                 } else {
                     ForEach(entries.prefix(2)) { entry in
                         HStack(spacing: 6) {
-                            if entry.isEstimate {
-                                Text("*").foregroundStyle(.secondary)
-                            }
+                            if entry.isEstimate { Text("*").foregroundStyle(.secondary) }
                             Text(entry.title)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -441,6 +301,32 @@ private struct MealRow: View {
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.woypSlate.opacity(0.06))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ActionTile: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.title2)
+                Text(title)
+                    .font(.subheadline).bold()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color.woypSlate.opacity(0.08))
             )
         }
         .buttonStyle(.plain)

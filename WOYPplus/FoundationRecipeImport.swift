@@ -23,7 +23,50 @@ struct FoundationIngredientDTO: Codable {
 
 enum FoundationRecipeImport {
 
-    static func importRecipe(from data: Data, into ctx: ModelContext) throws {
+    // Imports a SINGLE recipe JSON blob (used for “shared file import” later)
+    @discardableResult
+    static func importRecipe(from data: Data, into ctx: ModelContext) throws -> Bool {
+        var existingFingerprints = try loadExistingFingerprints(ctx: ctx)
+        return try importRecipe(from: data, into: ctx, existingFingerprints: &existingFingerprints)
+    }
+
+    // Imports ALL bundled recipe JSON files.
+    // If your JSON files are not actually inside a real bundle subfolder,
+    // this will still find them because it falls back to scanning all .json in the bundle.
+    @discardableResult
+    static func importAllBundledRecipes(into ctx: ModelContext, folderName: String = "FoundationRecipes") throws -> Int {
+
+        // 1) Try true bundle subfolder first
+        var urls = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: folderName) ?? []
+
+        // 2) Fallback: scan all bundled .json files (common when Xcode "groups" are used)
+        if urls.isEmpty {
+            urls = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? []
+        }
+
+        if urls.isEmpty { return 0 }
+
+        var existingFingerprints = try loadExistingFingerprints(ctx: ctx)
+
+        var importedCount = 0
+        for url in urls {
+            // Only import JSONs that decode as FoundationRecipeDTO
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let didImport = (try? importRecipe(from: data, into: ctx, existingFingerprints: &existingFingerprints)) ?? false
+            if didImport { importedCount += 1 }
+        }
+
+        try? ctx.save()
+        return importedCount
+    }
+
+    // MARK: - Internal helpers
+
+    private static func importRecipe(
+        from data: Data,
+        into ctx: ModelContext,
+        existingFingerprints: inout Set<String>
+    ) throws -> Bool {
 
         let decoder = JSONDecoder()
         let dto = try decoder.decode(FoundationRecipeDTO.self, from: data)
@@ -64,11 +107,11 @@ enum FoundationRecipeImport {
             totalFat: totalFat
         )
 
-        // Check duplicates
-        let existing = try ctx.fetch(FetchDescriptor<Recipe>())
-        if existing.contains(where: { $0.sourceFingerprint == fingerprint }) {
-            return
+        // De-dupe quickly
+        if existingFingerprints.contains(fingerprint) {
+            return false
         }
+        existingFingerprints.insert(fingerprint)
 
         let recipe = Recipe(
             title: dto.name,
@@ -85,6 +128,12 @@ enum FoundationRecipeImport {
 
         ctx.insert(recipe)
         try ctx.save()
+        return true
+    }
+
+    private static func loadExistingFingerprints(ctx: ModelContext) throws -> Set<String> {
+        let existing = try ctx.fetch(FetchDescriptor<Recipe>())
+        return Set(existing.compactMap { $0.sourceFingerprint })
     }
 
     private static func makeFingerprint(
@@ -94,9 +143,7 @@ enum FoundationRecipeImport {
         totalProtein: Double,
         totalFat: Double
     ) -> String {
-
         let n = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-
         return "\(n)|\(Int(totalKcal.rounded()))|\(Int(totalCarbs.rounded()))|\(Int(totalProtein.rounded()))|\(Int(totalFat.rounded()))"
     }
 }
