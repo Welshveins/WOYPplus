@@ -1,5 +1,6 @@
 {
-  "ingredients" : [
+    "categoryRaw" : "Snack",
+    "ingredients" : [
     {
       "amountGrams" : 30,
       "carbsPer100g" : 47.3,
