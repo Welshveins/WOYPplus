@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-import UIKit
 
 struct RecipeLibraryView: View {
 
@@ -17,32 +16,34 @@ struct RecipeLibraryView: View {
     @State private var showingImporter = false
     @State private var selectedRecipe: Recipe?
 
+    @State private var mealFilter: MealFilter = .all
+    @State private var courseFilter: CourseFilter = .all
+
     @State private var alertTitle = ""
     @State private var alertMessage = ""
     @State private var showAlert = false
 
-    // Filters
-    @State private var mealFilter: MealFilter = .all
-    @State private var courseFilter: CourseFilter = .all
+    // MARK: - Filters
 
-    enum MealFilter: String, CaseIterable, Identifiable {
+    private enum MealFilter: String, CaseIterable, Identifiable {
         case all = "All"
         case breakfast = "Breakfast"
         case lunch = "Lunch"
         case dinner = "Dinner"
         case snacks = "Snacks"
-
         var id: String { rawValue }
     }
 
-    enum CourseFilter: String, CaseIterable, Identifiable {
+    private enum CourseFilter: String, CaseIterable, Identifiable {
         case all = "All"
         case starter = "Starter"
         case main = "Main"
         case dessert = "Dessert"
-
         var id: String { rawValue }
     }
+
+    private enum InferredMeal { case breakfast, lunch, dinner, snacks }
+    private enum InferredCourse { case starter, main, dessert, none }
 
     private var searched: [Recipe] {
         let q = queryText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -52,26 +53,61 @@ struct RecipeLibraryView: View {
 
     private var filtered: [Recipe] {
         searched.filter { r in
-            // meal filter
-            if mealFilter != .all {
-                let m = inferredMeal(from: r.categoryRaw)
-                if mealFilter == .breakfast, m != .breakfast { return false }
-                if mealFilter == .lunch, m != .lunch { return false }
-                if mealFilter == .dinner, m != .dinner { return false }
-                if mealFilter == .snacks, m != .snacks { return false }
-            }
-
-            // course filter
-            if courseFilter != .all {
-                let c = inferredCourse(from: r.categoryRaw)
-                if courseFilter == .starter, c != .starter { return false }
-                if courseFilter == .main, c != .main { return false }
-                if courseFilter == .dessert, c != .dessert { return false }
-            }
-
-            return true
+            matchesMeal(r) && matchesCourse(r)
         }
     }
+
+    private func matchesMeal(_ r: Recipe) -> Bool {
+        if mealFilter == .all { return true }
+        let m = inferredMeal(from: r.categoryRaw)
+        switch mealFilter {
+        case .breakfast: return m == .breakfast
+        case .lunch:     return m == .lunch
+        case .dinner:    return m == .dinner
+        case .snacks:    return m == .snacks
+        case .all:       return true
+        }
+    }
+
+    private func matchesCourse(_ r: Recipe) -> Bool {
+        if courseFilter == .all { return true }
+        let c = inferredCourse(from: r.categoryRaw)
+        switch courseFilter {
+        case .starter: return c == .starter
+        case .main:    return c == .main
+        case .dessert: return c == .dessert
+        case .all:     return true
+        }
+    }
+
+    private func inferredMeal(from categoryRaw: String) -> InferredMeal {
+        let s = categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        // your current JSON values (and safe fallbacks)
+        if s.contains("breakfast") { return .breakfast }
+        if s.contains("lunch") { return .lunch }
+        if s.contains("dinner") { return .dinner }
+        if s.contains("snack") { return .snacks }
+
+        // common alt labels
+        if s.contains("brunch") { return .lunch }
+
+        // default (keeps list usable even with weird categories)
+        return .dinner
+    }
+
+    private func inferredCourse(from categoryRaw: String) -> InferredCourse {
+        let s = categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if s.contains("starter") { return .starter }
+        if s.contains("main") { return .main }
+        if s.contains("dessert") { return .dessert }
+
+        // If a recipe is tagged as Breakfast/Lunch/Dinner/Snacks only, treat as "none"
+        return .none
+    }
+
+    // MARK: - View
 
     var body: some View {
 
@@ -79,30 +115,24 @@ struct RecipeLibraryView: View {
 
             Section {
                 TextField("Search recipes", text: $queryText)
-            }
 
-            if !recipes.isEmpty {
-                Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Picker("When", selection: $mealFilter) {
-                            ForEach(MealFilter.allCases) { f in
-                                Text(f.rawValue).tag(f)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        Picker("Course", selection: $courseFilter) {
-                            ForEach(CourseFilter.allCases) { f in
-                                Text(f.rawValue).tag(f)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                Picker("Meal", selection: $mealFilter) {
+                    ForEach(MealFilter.allCases) { f in
+                        Text(f.rawValue).tag(f)
                     }
-                    .padding(.vertical, 2)
                 }
+                .pickerStyle(.segmented)
+
+                Picker("Course", selection: $courseFilter) {
+                    ForEach(CourseFilter.allCases) { f in
+                        Text(f.rawValue).tag(f)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
 
             if recipes.isEmpty {
+
                 Section {
                     Text("No recipes yet.")
                         .foregroundStyle(.secondary)
@@ -113,38 +143,35 @@ struct RecipeLibraryView: View {
                         Label("Import recipes (JSON)", systemImage: "square.and.arrow.down")
                     }
                 }
+
             } else {
 
-                // Grouping logic:
-                // - If mealFilter is All -> sections by meal (Breakfast/Lunch/Dinner/Snacks/Other)
-                // - If mealFilter is specific -> sections by course (Starter/Main/Dessert/Other)
-                let groups = makeGroups(from: filtered)
+                Section("Recipes") {
+                    ForEach(filtered) { r in
+                        Button {
+                            selectedRecipe = r
+                        } label: {
+                            HStack(spacing: 12) {
+                                thumbnail(for: r)
 
-                ForEach(groups, id: \.title) { group in
-                    if !group.items.isEmpty {
-                        Section(group.title) {
-                            ForEach(group.items) { r in
-                                Button {
-                                    selectedRecipe = r
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        thumbnail(for: r)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(r.title)
+                                        .font(.headline)
 
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            Text(r.title)
-                                                .font(.headline)
-
-                                            Text("\(Int(r.caloriesKcal.rounded())) kcal • C \(Int(r.carbsG.rounded()))g • P \(Int(r.proteinG.rounded()))g • F \(Int(r.fatG.rounded()))g")
-                                                .font(.subheadline)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                        }
-                                    }
-                                    .padding(.vertical, 4)
+                                    Text("\(Int(r.caloriesKcal.rounded())) kcal • C \(Int(r.carbsG.rounded()))g • P \(Int(r.proteinG.rounded()))g • F \(Int(r.fatG.rounded()))g")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .padding(.vertical, 4)
                         }
+                        .buttonStyle(.plain)
+                    }
+
+                    if filtered.isEmpty {
+                        Text("No matches.")
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -181,78 +208,6 @@ struct RecipeLibraryView: View {
         }
     }
 
-    // MARK: - Grouping
-
-    private struct GroupBlock {
-        let title: String
-        let items: [Recipe]
-    }
-
-    private func makeGroups(from list: [Recipe]) -> [GroupBlock] {
-
-        // If user chose a specific meal, group by course
-        if mealFilter != .all {
-            let starters = list.filter { inferredCourse(from: $0.categoryRaw) == .starter }
-            let mains = list.filter { inferredCourse(from: $0.categoryRaw) == .main }
-            let desserts = list.filter { inferredCourse(from: $0.categoryRaw) == .dessert }
-            let other = list.filter { inferredCourse(from: $0.categoryRaw) == .other }
-
-            return [
-                .init(title: "Starter", items: starters),
-                .init(title: "Main", items: mains),
-                .init(title: "Dessert", items: desserts),
-                .init(title: "Other", items: other)
-            ]
-        }
-
-        // Otherwise group by meal
-        let breakfast = list.filter { inferredMeal(from: $0.categoryRaw) == .breakfast }
-        let lunch = list.filter { inferredMeal(from: $0.categoryRaw) == .lunch }
-        let dinner = list.filter { inferredMeal(from: $0.categoryRaw) == .dinner }
-        let snacks = list.filter { inferredMeal(from: $0.categoryRaw) == .snacks }
-        let other = list.filter { inferredMeal(from: $0.categoryRaw) == .other }
-
-        return [
-            .init(title: "Breakfast", items: breakfast),
-            .init(title: "Lunch", items: lunch),
-            .init(title: "Dinner", items: dinner),
-            .init(title: "Snacks", items: snacks),
-            .init(title: "Other", items: other)
-        ]
-    }
-
-    private enum InferredMeal {
-        case breakfast, lunch, dinner, snacks, other
-    }
-
-    private func inferredMeal(from raw: String?) -> InferredMeal {
-        let s = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        if s.contains("breakfast") { return .breakfast }
-        if s.contains("lunch") { return .lunch }
-        if s.contains("dinner") { return .dinner }
-        if s.contains("snack") || s.contains("snacks") { return .snacks }
-
-        // Common Foundation categories that should behave like snacks/desserts:
-        if s.contains("dessert") || s.contains("pudding") { return .snacks }
-
-        return .other
-    }
-
-    private enum InferredCourse {
-        case starter, main, dessert, other
-    }
-
-    private func inferredCourse(from raw: String?) -> InferredCourse {
-        let s = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        if s.contains("starter") || s.contains("appetizer") || s.contains("appetiser") { return .starter }
-        if s.contains("main") || s.contains("entrée") || s.contains("entree") { return .main }
-        if s.contains("dessert") || s.contains("pudding") || s.contains("sweet") { return .dessert }
-
-        return .other
-    }
-
     // MARK: - Import
 
     private func importFrom(_ urls: [URL]) {
@@ -267,19 +222,27 @@ struct RecipeLibraryView: View {
             do {
                 let data = try Data(contentsOf: url)
 
-                // If your importer returns Bool (true=imported, false=duplicate/skip)
+                // Prefer your Foundation importer (handles ingredients + photo + fingerprint de-dupe)
+                // If your importRecipe returns Bool (didImport), we’ll count properly.
+                // If it returns Void, this still compiles if you change the next 3 lines accordingly.
                 let didImport = try FoundationRecipeImport.importRecipe(from: data, into: ctx)
                 if didImport {
                     imported += 1
                 } else {
                     skipped += 1
                 }
+
             } catch {
                 failed += 1
             }
         }
 
-        toast("Import complete", "Imported \(imported). Skipped \(skipped). Failed \(failed).")
+        var parts: [String] = []
+        parts.append("Imported \(imported)")
+        if skipped > 0 { parts.append("Skipped \(skipped)") }
+        if failed > 0 { parts.append("Failed \(failed)") }
+
+        toast("Import complete", parts.joined(separator: " • "))
     }
 
     private func toast(_ title: String, _ message: String) {
