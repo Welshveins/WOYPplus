@@ -15,7 +15,9 @@ struct RecipeLibraryView: View {
     @State private var queryText = ""
     @State private var showingImporter = false
     @State private var selectedRecipe: Recipe?
-
+    
+    @State private var showingBuilder = false
+    
     @State private var mealFilter: MealFilter = .all
     @State private var courseFilter: CourseFilter = .all
 
@@ -205,6 +207,21 @@ struct RecipeLibraryView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(alertMessage)
+        }
+        .sheet(isPresented: $showingBuilder) {
+            NavigationStack {
+                RecipeBuilderView()
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingBuilder = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("New recipe")
+            }
         }
     }
 

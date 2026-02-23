@@ -1,89 +1,91 @@
 import SwiftUI
+import SwiftData
 
-/// Choose grams OR default portion if the Food provides one.
 struct FoodPortionSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
     let food: Food
-    let onPick: (FoodPickResult) -> Void
+    let initialGrams: Double
+    let onConfirm: (Double) -> Void
 
-    @State private var useDefaultPortion = false
-    @State private var gramsText = "100"
-
-    private var hasDefaultPortion: Bool {
-        guard let g = food.defaultPortionGrams else { return false }
-        return g > 0
-    }
-
-    private var chosenGrams: Double {
-        if useDefaultPortion, let g = food.defaultPortionGrams, g > 0 {
-            return g
-        }
-        return Double(gramsText) ?? 0
-    }
+    @State private var grams: Double = 100
 
     var body: some View {
-
         NavigationStack {
             VStack(spacing: 16) {
 
+                // Header
                 VStack(alignment: .leading, spacing: 6) {
                     Text(food.name)
                         .font(.system(size: 22, weight: .semibold))
                         .lineLimit(2)
 
-                    Text("Choose portion")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    if let portionName = food.defaultPortionName,
+                       let portionGrams = food.defaultPortionGrams,
+                       portionGrams > 0 {
+                        Text("Default: \(portionName) • \(Int(portionGrams.rounded())) g")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 8)
 
-                if hasDefaultPortion {
-                    Toggle(isOn: $useDefaultPortion) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Use default portion")
-                                .font(.headline)
-                            Text(defaultPortionSubtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .tint(.woypTeal)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.woypSlate.opacity(0.06))
-                    )
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Grams")
-                        .font(.headline)
-
-                    HStack(spacing: 10) {
-                        TextField("e.g. 180", text: $gramsText)
-                            .keyboardType(.decimalPad)
-                            .textFieldStyle(.roundedBorder)
-                            .disabled(useDefaultPortion && hasDefaultPortion)
-
-                        Text("g")
+                // Slider card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Amount")
+                            .font(.headline)
+                        Spacer()
+                        Text("\(Int(grams.rounded())) g")
+                            .font(.headline)
                             .foregroundStyle(.secondary)
                     }
 
-                    Text("Tip: /100g macros are your base. This just scales them.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Slider(value: $grams, in: sliderRange, step: sliderStep)
+
+                    HStack {
+                        Text("\(Int(sliderRange.lowerBound)) g")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(Int(sliderRange.upperBound)) g")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let portionName = food.defaultPortionName,
+                       let portionGrams = food.defaultPortionGrams,
+                       portionGrams > 0 {
+                        Button {
+                            grams = portionGrams
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.uturn.left")
+                                Text("Use default portion")
+                                Spacer()
+                                Text("\(portionName)")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 2)
+                    }
                 }
-                .padding(12)
+                .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.woypSlate.opacity(0.06))
+                        .fill(Color.woypSlate.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
                 )
 
+                // Macro preview
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("This portion")
+                    Text("This ingredient")
                         .font(.headline)
 
                     Text(previewLine)
@@ -97,33 +99,44 @@ struct FoodPortionSheet: View {
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 12)
-            .navigationTitle("Add food")
+            .navigationTitle("Add ingredient")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { add() }
-                        .disabled(chosenGrams <= 0)
+                    Button("Add") {
+                        onConfirm(max(0, grams))
+                        dismiss()
+                    }
+                    .disabled(grams <= 0)
                 }
             }
         }
         .onAppear {
-            // sensible defaults
-            gramsText = hasDefaultPortion ? "\(Int(food.defaultPortionGrams ?? 100))" : "100"
-            useDefaultPortion = hasDefaultPortion // start on default if it exists
+            let start = initialGrams > 0 ? initialGrams : (food.defaultPortionGrams ?? 100)
+            grams = clamp(start, sliderRange.lowerBound, sliderRange.upperBound)
         }
     }
 
-    private var defaultPortionSubtitle: String {
-        let name = (food.defaultPortionName ?? "Default portion")
-        let g = Int((food.defaultPortionGrams ?? 0).rounded())
-        return "\(name) • \(g)g"
+    // MARK: - Slider tuning
+
+    private var sliderRange: ClosedRange<Double> {
+        // Keep it practical + “fast”
+        // (You can widen later if needed.)
+        0...600
     }
 
+    private var sliderStep: Double {
+        // Nice feel: coarse enough to move quickly, fine enough to be useful.
+        5
+    }
+
+    // MARK: - Preview
+
     private var previewLine: String {
-        let g = chosenGrams
+        let g = max(0, grams)
         let kcal = food.kcalPer100g * g / 100.0
         let c = food.carbsPer100g * g / 100.0
         let p = food.proteinPer100g * g / 100.0
@@ -133,33 +146,7 @@ struct FoodPortionSheet: View {
         return "\(Int(kcal.rounded())) kcal • C \(Int(c.rounded()))g • P \(Int(p.rounded()))g • F \(Int(f.rounded()))g • Fibre \(Int(fi.rounded()))g"
     }
 
-    private func add() {
-        let g = chosenGrams
-
-        let kcal = food.kcalPer100g * g / 100.0
-        let c = food.carbsPer100g * g / 100.0
-        let p = food.proteinPer100g * g / 100.0
-        let f = food.fatPer100g * g / 100.0
-        let fi = food.fibrePer100g * g / 100.0
-
-        let label: String?
-        if useDefaultPortion, let name = food.defaultPortionName, !name.isEmpty {
-            label = name
-        } else {
-            label = "\(Int(g.rounded()))g"
-        }
-
-        onPick(
-            FoodPickResult(
-                foodName: food.name,
-                grams: g,
-                portionLabel: label,
-                kcal: kcal,
-                carbsG: c,
-                proteinG: p,
-                fatG: f,
-                fibreG: fi
-            )
-        )
+    private func clamp(_ v: Double, _ lo: Double, _ hi: Double) -> Double {
+        min(max(v, lo), hi)
     }
 }
