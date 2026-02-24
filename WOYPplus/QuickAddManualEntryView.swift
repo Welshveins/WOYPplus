@@ -8,6 +8,7 @@ struct QuickAddManualEntryView: View {
 
     let day: Day
     let mealSlot: MealSlot
+    let useTimeBasedDefault: Bool
 
     @State private var title = ""
     @State private var kcal = ""
@@ -56,9 +57,11 @@ struct QuickAddManualEntryView: View {
 
     private func log() {
 
+        let slotToUse = useTimeBasedDefault ? MealSlot.slot(for: Date()) : mealSlot
+
         let entry = Entry(
             title: title.isEmpty ? "Quick add" : title,
-            mealSlot: mealSlot,
+            mealSlot: slotToUse,
             carbsG: Double(carbs) ?? 0,
             proteinG: Double(protein) ?? 0,
             fatG: Double(fat) ?? 0,

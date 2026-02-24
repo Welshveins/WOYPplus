@@ -111,6 +111,12 @@ struct TodayView: View {
                 }
                 .buttonStyle(.plain)
 
+                // Explainer (Stage 1)
+                Text("Outer ring = your most recent day.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, -8)
+
                 // Stats row
                 MacroStatsRow(
                     kcal: t.kcal,
@@ -184,7 +190,17 @@ struct TodayView: View {
                     )
                 }
                 .padding(.top, 6)
-
+                
+                NavigationLink {
+                    HelpInstructionsView()
+                } label: {
+                    Text("Help & instructions")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 12)
                 Spacer(minLength: 18)
             }
             .padding(.horizontal, 16)
@@ -236,26 +252,12 @@ struct TodayView: View {
         }
         .sheet(isPresented: $showingQuickAddSheet) {
             NavigationStack {
-                // If your project uses a different entry point name, this is the one line to change.
                 QuickAddSheet(day: day, mealSlot: quickAddTargetSlot)
             }
         }
 
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    DataBackupView()
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .font(.headline)
-                        .padding(10)
-                        .background(Circle().fill(Color.woypSlate.opacity(0.22)))
-                        .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-        }
+    
     }
 }
 

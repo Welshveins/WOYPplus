@@ -19,7 +19,6 @@ struct BarcodeQuickAddView: View {
             if let product {
                 BarcodeAmountAndLogView(
                     day: day,
-                    mealSlot: mealSlot,
                     product: product
                 )
             } else {
@@ -76,7 +75,6 @@ struct BarcodeQuickAddView: View {
 
             do {
                 if let p = try await OpenFoodFactsAPI.fetchByBarcode(code) {
-                    // require usable nutriments (kcal + at least one macro)
                     if let n = p.nutriments, n.hasUsableCore {
                         product = p
                     } else {
@@ -98,7 +96,6 @@ private struct BarcodeAmountAndLogView: View {
     @Environment(\.modelContext) private var ctx
 
     let day: Day
-    let mealSlot: MealSlot
     let product: OFFProduct
 
     @State private var gramsText: String = "100"
@@ -110,16 +107,21 @@ private struct BarcodeAmountAndLogView: View {
             Section("Product") {
                 Text(product.displayName)
                 if let b = product.brands, !b.isEmpty {
-                    Text(b).font(.footnote).foregroundStyle(.secondary)
+                    Text(b)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 if let c = product.code, !c.isEmpty {
-                    Text("Barcode: \(c)").font(.footnote).foregroundStyle(.secondary)
+                    Text("Barcode: \(c)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             Section("Amount") {
                 TextField("g / ml", text: $gramsText)
                     .keyboardType(.decimalPad)
+
                 Text("Assumes 1 ml = 1 g")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -150,17 +152,14 @@ private struct BarcodeAmountAndLogView: View {
         HStack {
             Text(label)
             Spacer()
-            Text(v.map { "\(format($0))" } ?? "—")
+            Text(v.map { format($0) } ?? "—")
                 .foregroundStyle(.secondary)
         }
     }
 
     private func format(_ x: Double) -> String {
-        if labelNeedsInt(x) { return "\(Int(x.rounded()))" }
-        return String(format: "%.1f", x)
+        "\(Int(x.rounded()))"
     }
-
-    private func labelNeedsInt(_ x: Double) -> Bool { true } // kcal often int; we keep simple.
 
     private func log() {
         guard let n = product.nutriments, n.hasUsableCore else { return }
@@ -175,9 +174,11 @@ private struct BarcodeAmountAndLogView: View {
         let fat = (n.fat_100g ?? 0) * factor
         let fibre = (n.fiber_100g ?? 0) * factor
 
+        let slot = MealSlot.slot(for: Date())
+
         let entry = Entry(
             title: product.displayName,
-            mealSlot: mealSlot,
+            mealSlot: slot,
             carbsG: carbs,
             proteinG: protein,
             fatG: fat,

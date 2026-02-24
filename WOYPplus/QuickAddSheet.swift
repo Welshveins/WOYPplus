@@ -11,32 +11,60 @@ struct QuickAddSheet: View {
     @State private var showingManual = false
 
     var body: some View {
+        VStack(spacing: 16) {
 
-        VStack(spacing: 18) {
+            // Header
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Quick add")
+                    .font(.system(size: 22, weight: .semibold))
 
-            Spacer()
-
-            bigButton(
-                title: "Scan barcode",
-                systemImage: "barcode.viewfinder"
-            ) {
-                showingBarcode = true
+                Text("Scan a barcode or enter manually.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 6)
 
-            bigButton(
-                title: "Enter manually",
-                systemImage: "square.and.pencil"
-            ) {
-                showingManual = true
+            // Buttons (as a single card group)
+            VStack(spacing: 12) {
+                bigButton(
+                    title: "Scan barcode",
+                    systemImage: "barcode.viewfinder"
+                ) {
+                    showingBarcode = true
+                }
+
+                bigButton(
+                    title: "Enter manually",
+                    systemImage: "square.and.pencil"
+                ) {
+                    showingManual = true
+                }
             }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color.woypSlate.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+            )
 
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
+        .padding(.bottom, 18)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button("Close") { dismiss() }
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .sheet(isPresented: $showingBarcode) {
@@ -44,7 +72,7 @@ struct QuickAddSheet: View {
         }
         .sheet(isPresented: $showingManual) {
             NavigationStack {
-                QuickAddManualEntryView(day: day, mealSlot: mealSlot)
+                QuickAddManualEntryView(day: day, mealSlot: mealSlot, useTimeBasedDefault: true)
             }
         }
     }
@@ -69,7 +97,7 @@ struct QuickAddSheet: View {
             }
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(Color.woypSlate.opacity(0.08))
             )
         }

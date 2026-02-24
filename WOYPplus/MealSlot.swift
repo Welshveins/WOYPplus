@@ -55,3 +55,24 @@ enum MealSlot: String, Codable, CaseIterable, Identifiable {
         return minutes >= start && minutes < end
     }
 }
+extension MealSlot {
+    // Hard windows (local time):
+    // Breakfast 06:00–10:00
+    // Lunch     11:30–14:30
+    // Dinner    17:30–21:00
+    // Snacks    otherwise
+    static func slot(for date: Date, calendar: Calendar = .current) -> MealSlot {
+        let minutes = calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)
+
+        func inRange(_ startH: Int, _ startM: Int, _ endH: Int, _ endM: Int) -> Bool {
+            let start = startH * 60 + startM
+            let end = endH * 60 + endM
+            return minutes >= start && minutes <= end
+        }
+
+        if inRange(6, 0, 10, 0) { return .breakfast }
+        if inRange(11, 30, 14, 30) { return .lunch }
+        if inRange(17, 30, 21, 0) { return .dinner }
+        return .snacks
+    }
+}
