@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import UIKit
 
 struct RecipeLibraryView: View {
 
@@ -15,9 +16,10 @@ struct RecipeLibraryView: View {
     @State private var queryText = ""
     @State private var showingImporter = false
     @State private var selectedRecipe: Recipe?
-    
+
     @State private var showingBuilder = false
-    
+    @State private var editingRecipe: Recipe?
+
     @State private var mealFilter: MealFilter = .all
     @State private var courseFilter: CourseFilter = .all
 
@@ -25,7 +27,7 @@ struct RecipeLibraryView: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
 
-    // MARK: - Filters
+    // MARK: Filters
 
     private enum MealFilter: String, CaseIterable, Identifiable {
         case all = "All"
@@ -54,9 +56,9 @@ struct RecipeLibraryView: View {
     }
 
     private var filtered: [Recipe] {
-        searched.filter { r in
-            matchesMeal(r) && matchesCourse(r)
-        }
+        searched
+            .filter { matchesMeal($0) && matchesCourse($0) }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
     private func matchesMeal(_ r: Recipe) -> Bool {
@@ -83,38 +85,52 @@ struct RecipeLibraryView: View {
     }
 
     private func inferredMeal(from categoryRaw: String) -> InferredMeal {
-        let s = categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        // your current JSON values (and safe fallbacks)
+        let s = categoryRaw.lowercased()
         if s.contains("breakfast") { return .breakfast }
         if s.contains("lunch") { return .lunch }
         if s.contains("dinner") { return .dinner }
         if s.contains("snack") { return .snacks }
-
-        // common alt labels
-        if s.contains("brunch") { return .lunch }
-
-        // default (keeps list usable even with weird categories)
         return .dinner
     }
 
     private func inferredCourse(from categoryRaw: String) -> InferredCourse {
-        let s = categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
+        let s = categoryRaw.lowercased()
         if s.contains("starter") { return .starter }
         if s.contains("main") { return .main }
         if s.contains("dessert") { return .dessert }
-
-        // If a recipe is tagged as Breakfast/Lunch/Dinner/Snacks only, treat as "none"
         return .none
     }
 
-    // MARK: - View
+    // MARK: View
 
     var body: some View {
 
         List {
 
+            // Add new recipe (in body)
+            Section {
+                Button {
+                    showingBuilder = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add new recipe")
+                            .font(.system(size: 16, weight: .semibold))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.woypSlate.opacity(0.08))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Filters
             Section {
                 TextField("Search recipes", text: $queryText)
 
@@ -133,142 +149,67 @@ struct RecipeLibraryView: View {
                 .pickerStyle(.segmented)
             }
 
-            if recipes.isEmpty {
-
-                Section {
-                    Text("No recipes yet.")
-                        .foregroundStyle(.secondary)
-
+            // Recipes list
+            Section("Recipes") {
+                ForEach(filtered) { r in
                     Button {
-                        showingImporter = true
+                        selectedRecipe = r
                     } label: {
-                        Label("Import recipes (JSON)", systemImage: "square.and.arrow.down")
-                    }
-                }
+                        HStack(spacing: 12) {
+                            thumbnail(for: r)
 
-            } else {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(r.title)
+                                    .font(.headline)
 
-                Section("Recipes") {
-                    ForEach(filtered) { r in
-                        Button {
-                            selectedRecipe = r
-                        } label: {
-                            HStack(spacing: 12) {
-                                thumbnail(for: r)
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(r.title)
-                                        .font(.headline)
-
-                                    Text("\(Int(r.caloriesKcal.rounded())) kcal • C \(Int(r.carbsG.rounded()))g • P \(Int(r.proteinG.rounded()))g • F \(Int(r.fatG.rounded()))g")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
+                                Text("\(Int(r.caloriesKcal.rounded())) kcal • C \(Int(r.carbsG.rounded()))g • P \(Int(r.proteinG.rounded()))g • F \(Int(r.fatG.rounded()))g")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                             }
-                            .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
-                    }
 
-                    if filtered.isEmpty {
-                        Text("No matches.")
-                            .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions {
+                        Button {
+                            editingRecipe = r
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.blue)
                     }
                 }
 
-                Section {
-                    Button {
-                        showingImporter = true
-                    } label: {
-                        Label("Import recipes (JSON)", systemImage: "square.and.arrow.down")
-                    }
+                if filtered.isEmpty {
+                    Text("No matches.")
+                        .foregroundStyle(.secondary)
                 }
             }
         }
         .navigationTitle("Recipes")
         .navigationBarTitleDisplayMode(.inline)
-        .fileImporter(
-            isPresented: $showingImporter,
-            allowedContentTypes: [.json],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                importFrom(urls)
-            case .failure(let error):
-                toast("Import failed", error.localizedDescription)
-            }
-        }
+
         .sheet(item: $selectedRecipe) { r in
             RecipeServingsSheet(recipe: r, day: day, mealSlot: mealSlot)
         }
-        .alert(alertTitle, isPresented: $showAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(alertMessage)
-        }
+
         .sheet(isPresented: $showingBuilder) {
             NavigationStack {
                 RecipeBuilderView()
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingBuilder = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("New recipe")
+
+        .sheet(item: $editingRecipe) { r in
+            NavigationStack {
+                RecipeBuilderView(existingRecipe: r)
             }
         }
     }
 
-    // MARK: - Import
-
-    private func importFrom(_ urls: [URL]) {
-        var imported = 0
-        var skipped = 0
-        var failed = 0
-
-        for url in urls {
-            let didStart = url.startAccessingSecurityScopedResource()
-            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-
-            do {
-                let data = try Data(contentsOf: url)
-
-                // Prefer your Foundation importer (handles ingredients + photo + fingerprint de-dupe)
-                // If your importRecipe returns Bool (didImport), we’ll count properly.
-                // If it returns Void, this still compiles if you change the next 3 lines accordingly.
-                let didImport = try FoundationRecipeImport.importRecipe(from: data, into: ctx)
-                if didImport {
-                    imported += 1
-                } else {
-                    skipped += 1
-                }
-
-            } catch {
-                failed += 1
-            }
-        }
-
-        var parts: [String] = []
-        parts.append("Imported \(imported)")
-        if skipped > 0 { parts.append("Skipped \(skipped)") }
-        if failed > 0 { parts.append("Failed \(failed)") }
-
-        toast("Import complete", parts.joined(separator: " • "))
-    }
-
-    private func toast(_ title: String, _ message: String) {
-        alertTitle = title
-        alertMessage = message
-        showAlert = true
-    }
-
-    // MARK: - Thumbnail
+    // MARK: Thumbnail
 
     @ViewBuilder
     private func thumbnail(for recipe: Recipe) -> some View {

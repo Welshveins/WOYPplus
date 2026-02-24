@@ -20,6 +20,9 @@ struct MealDetailView: View {
     @State private var showingDrinksSheet = false
     @State private var showingExtrasSheet = false
 
+    // Stage 3: "Add new recipe" from meal screen
+    @State private var showingRecipeBuilder = false
+
     private var entries: [Entry] {
         allEntries
             .filter { e in
@@ -34,6 +37,54 @@ struct MealDetailView: View {
 
         List {
 
+            // Stage 3: in-body actions (replaces header +)
+            Section {
+                VStack(spacing: 10) {
+
+                    Button {
+                        showingAddChooser = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add to \(title)")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.woypSlate.opacity(0.08))
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        showingRecipeBuilder = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.pencil")
+                            Text("Add new recipe")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.woypSlate.opacity(0.06))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 4)
+            }
+
+            // Entries
             if entries.isEmpty {
                 Text("Nothing logged yet")
                     .foregroundStyle(.secondary)
@@ -87,28 +138,15 @@ struct MealDetailView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingAddChooser = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .padding(10)
-                        .background(Circle().fill(Color.woypSlate.opacity(0.18)))
-                        .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add")
-            }
-        }
+
+        // Stage 3: remove header + (no toolbar add button)
+
         .confirmationDialog(
             "Add to \(title)",
             isPresented: $showingAddChooser,
             titleVisibility: .visible
         ) {
             Button("Recipe") { showingRecipeLibrary = true }
-            Button("Barcode") { /* placeholder */ }
             Button("Your plate") { showingPlateSheet = true }
             Button("Basics") { showingBasicsSheet = true }
             Button("Drinks") { showingDrinksSheet = true }
@@ -116,7 +154,7 @@ struct MealDetailView: View {
             Button("Cancel", role: .cancel) { }
         }
 
-        // ✅ all sheets are siblings (not nested)
+        // Sheets
         .sheet(isPresented: $showingPlateSheet) {
             AddPlateSheet(day: day)
         }
@@ -137,6 +175,11 @@ struct MealDetailView: View {
         .sheet(item: $selectedEntry) { entry in
             EntryEditView(day: day, entry: entry)
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingRecipeBuilder) {
+            NavigationStack {
+                RecipeBuilderView()
+            }
         }
     }
 
