@@ -12,7 +12,14 @@ struct RecipeServingsSheet: View {
 
     @State private var servings: Double = 1.0
 
-    // Foundation-style fractions
+    @State private var showingShareExplainer = false
+    @State private var shareURL: URL?
+    @State private var showingShareSheet = false
+
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
+    @State private var showAlert = false
+
     private let options: [Double] = [
         0.25, 0.5, 0.75,
         1.0,
@@ -26,7 +33,6 @@ struct RecipeServingsSheet: View {
 
             VStack(spacing: 16) {
 
-                // Title
                 VStack(alignment: .leading, spacing: 6) {
                     Text(recipe.title)
                         .font(.system(size: 22, weight: .semibold))
@@ -39,7 +45,29 @@ struct RecipeServingsSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 8)
 
-                // Servings quick buttons
+                // Stage 4: Share (Option A style)
+                Button {
+                    showingShareExplainer = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 26)
+                        Text("Share recipe")
+                            .font(.system(size: 16, weight: .semibold))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.woypSlate.opacity(0.08))
+                    )
+                }
+                .buttonStyle(.plain)
+
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Servings")
                         .font(.headline)
@@ -67,7 +95,6 @@ struct RecipeServingsSheet: View {
                     }
                 }
 
-                // Preview (scaled totals)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("This entry")
                         .font(.headline)
@@ -94,9 +121,26 @@ struct RecipeServingsSheet: View {
                 }
             }
         }
-        .onAppear {
-            // sensible default if coming back to edit later
-            servings = 1.0
+        .onAppear { servings = 1.0 }
+        .confirmationDialog(
+            "Share recipe",
+            isPresented: $showingShareExplainer,
+            titleVisibility: .visible
+        ) {
+            Button("Share…") { shareNow() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Shares a small recipe file you can send via AirDrop / WhatsApp / Messages.")
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = shareURL {
+                ShareSheet(items: [url])
+            }
+        }
+        .alert(alertTitle, isPresented: $showAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(alertMessage)
         }
     }
 
@@ -114,6 +158,18 @@ struct RecipeServingsSheet: View {
         return "\(Int(kcal.rounded())) kcal • C \(Int(c.rounded()))g • P \(Int(p.rounded()))g • F \(Int(f.rounded()))g • Fibre \(Int(fi.rounded()))g"
     }
 
+    private func shareNow() {
+        do {
+            let url = try RecipeShareCodec.writeTempShareFile(for: recipe)
+            shareURL = url
+            showingShareSheet = true
+        } catch {
+            alertTitle = "Share failed"
+            alertMessage = error.localizedDescription
+            showAlert = true
+        }
+    }
+
     private func save() {
 
         let entry = Entry(
@@ -126,8 +182,8 @@ struct RecipeServingsSheet: View {
             caloriesKcal: recipe.caloriesKcal * servings,
             isEstimate: false,
             day: day,
-            recipe: recipe,          // ✅ link back to recipe
-            servings: servings        // ✅ store fraction
+            recipe: recipe,
+            servings: servings
         )
 
         ctx.insert(entry)

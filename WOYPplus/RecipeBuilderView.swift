@@ -279,7 +279,13 @@ struct RecipeBuilderView: View {
         let n = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         return "\(n)|\(Int(totalKcal.rounded()))|\(Int(totalCarbs.rounded()))|\(Int(totalProtein.rounded()))|\(Int(totalFat.rounded()))"
     }
-}
+    private func deleteRecipe() {
+        guard let r = existingRecipe else { return }
+        ctx.delete(r)
+        try? ctx.save()
+        dismiss()
+    }}
+
 
 // MARK: - Draft ingredient
 
