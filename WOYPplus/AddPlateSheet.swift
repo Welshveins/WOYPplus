@@ -1,4 +1,3 @@
-// AddPlateSheet.swift (FULL FILE REPLACEMENT)
 import SwiftUI
 import SwiftData
 import Vision
@@ -20,10 +19,9 @@ struct AddPlateSheet: View {
 
     // Persisted settings
     @AppStorage("addPlate_cropToCentre") private var cropToCentre: Bool = true
-    @AppStorage("addPlate_plateMix") private var plateMixRaw: String = PlateMix.balanced.rawValue
+    @AppStorage("addPlate_plateMix") private var plateMixRaw: String = "" // empty = none selected
 
-    // Keep simple state for segmented picker (prevents type-check blowups)
-    @State private var plateMix: PlateMix = .balanced
+    @State private var plateMix: PlateMix? = nil
 
     // Photo
     @State private var showingCamera = false
@@ -33,7 +31,7 @@ struct AddPlateSheet: View {
     // Analysis
     @State private var isAnalysing = false
     @State private var analysisLabel: String?
-    @State private var lastSuggestedMacros: Macros?
+    @State private var lastVisionIdentifier: String?
 
     // Macros
     @State private var kcal: String = ""
@@ -60,17 +58,10 @@ struct AddPlateSheet: View {
             .toolbar { toolbarContent }
             .onAppear {
                 mealSlot = MealSlot.defaultSlot(for: when)
-                plateMix = PlateMix(rawValue: plateMixRaw) ?? .balanced
+                plateMix = PlateMix(rawValue: plateMixRaw) // nil if empty
             }
             .onChange(of: plateMix) { _, newValue in
-                plateMixRaw = newValue.rawValue
-
-                // If we already have a suggestion, re-apply it through the new mix (unless user locked)
-                guard !userLockedMacros else { return }
-                if let s = lastSuggestedMacros {
-                    let adjusted = plateMix.apply(to: s)
-                    fill(adjusted, markUnlocked: false)
-                }
+                plateMixRaw = newValue?.rawValue ?? ""
             }
             .onChange(of: when) { _, newValue in
                 guard !userManuallyPickedSlot else { return }
@@ -122,12 +113,7 @@ struct AddPlateSheet: View {
             Toggle("Focus on centre", isOn: $cropToCentre)
                 .font(.footnote)
 
-            Picker("Plate mix", selection: $plateMix) {
-                ForEach(PlateMix.allCases) { m in
-                    Text(m.display).tag(m)
-                }
-            }
-            .pickerStyle(.segmented)
+            plateMixGrid
 
             if isAnalysing {
                 HStack {
@@ -141,6 +127,49 @@ struct AddPlateSheet: View {
                 Text("Detected: \(analysisLabel)")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var plateMixGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ],
+            spacing: 8
+        ) {
+            ForEach(PlateMix.allCases) { mix in
+                let isSelected = (plateMix == mix)
+
+                Button {
+                    plateMix = mix
+                    // If we already have a vision label, re-apply using the newly chosen mix
+                    if let id = lastVisionIdentifier {
+                        userLockedMacros = false
+                        applyHeuristic(for: id)
+                    }
+                } label: {
+                    Text(mix.display)
+                        .font(.system(size: 13, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(isSelected
+                                      ? Color.woypTeal.opacity(0.12)
+                                      : Color.woypSlate.opacity(0.07))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -195,13 +224,10 @@ struct AddPlateSheet: View {
             numberField("Fat (g)", text: $fat)
             numberField("Fibre (g)", text: $fibre)
 
-            if lastSuggestedMacros != nil {
+            if let id = lastVisionIdentifier {
                 Button {
                     userLockedMacros = false
-                    if let s = lastSuggestedMacros {
-                        let adjusted = plateMix.apply(to: s)
-                        fill(adjusted, markUnlocked: true)
-                    }
+                    applyHeuristic(for: id)
                 } label: {
                     Label("Re-apply estimate", systemImage: "wand.and.stars")
                 }
@@ -250,7 +276,7 @@ struct AddPlateSheet: View {
         DispatchQueue.main.async {
             isAnalysing = true
             analysisLabel = nil
-            lastSuggestedMacros = nil
+            lastVisionIdentifier = nil
         }
 
         let request = VNClassifyImageRequest { request, _ in
@@ -259,29 +285,22 @@ struct AddPlateSheet: View {
                 return
             }
 
-            // Build a multi-label list for mixed-plate tagging
-            let labels: [PlateMacroTagger.Label] = results
-                .prefix(20)
-                .map { PlateMacroTagger.Label(identifier: $0.identifier, confidence: Double($0.confidence)) }
-
-            let estimate = PlateMacroTagger.estimate(from: labels)
-            let base = Macros(
-                k: estimate.macros.k,
-                c: estimate.macros.c,
-                p: estimate.macros.p,
-                f: estimate.macros.f,
-                fi: estimate.macros.fi
-            )
-            let adjusted = plateMix.apply(to: base)
+            // Keep your simple selection strategy (you can expand later)
+            let best = results.first(where: { $0.confidence > 0.15 })
 
             DispatchQueue.main.async {
                 isAnalysing = false
 
-                analysisLabel = estimate.detectedSummary
-                lastSuggestedMacros = base
+                guard let best else {
+                    analysisLabel = "Unknown"
+                    return
+                }
+
+                analysisLabel = "\(best.identifier) (\(Int(best.confidence * 100))%)"
+                lastVisionIdentifier = best.identifier
 
                 guard !userLockedMacros else { return }
-                fill(adjusted, markUnlocked: true)
+                applyHeuristic(for: best.identifier)
             }
         }
 
@@ -291,8 +310,39 @@ struct AddPlateSheet: View {
         }
     }
 
-    private func fill(_ m: Macros, markUnlocked: Bool) {
-        if markUnlocked { userLockedMacros = false }
+    // MARK: - Heuristic mapping
+
+    private func applyHeuristic(for label: String) {
+        let lower = label.lowercased()
+
+        // Base guess (v1)
+        var base = Macros(k: 600, c: 60, p: 30, f: 25, fi: 5)
+
+        if lower.contains("chocolate") || lower.contains("candy") || lower.contains("sweet") {
+            base = Macros(k: 260, c: 30, p: 3, f: 14, fi: 2)
+        } else if lower.contains("pizza") {
+            base = Macros(k: 800, c: 90, p: 35, f: 35, fi: 5)
+        } else if lower.contains("burger") {
+            base = Macros(k: 750, c: 60, p: 40, f: 45, fi: 4)
+        } else if lower.contains("pasta") || lower.contains("noodle") {
+            base = Macros(k: 700, c: 100, p: 25, f: 20, fi: 5)
+        } else if lower.contains("rice") {
+            base = Macros(k: 650, c: 105, p: 20, f: 15, fi: 4)
+        } else if lower.contains("curry") || lower.contains("stew") || lower.contains("chilli") {
+            base = Macros(k: 750, c: 80, p: 35, f: 30, fi: 6)
+        } else if lower.contains("salad") {
+            base = Macros(k: 350, c: 20, p: 15, f: 25, fi: 6)
+        } else if lower.contains("sandwich") || lower.contains("wrap") {
+            base = Macros(k: 550, c: 55, p: 25, f: 22, fi: 5)
+        }
+
+        // Only apply plate mix if user has actually selected one
+        let adjusted = plateMix?.apply(to: base) ?? base
+        fill(adjusted)
+    }
+
+    private func fill(_ m: Macros) {
+        userLockedMacros = false
         kcal = "\(Int(m.k.rounded()))"
         carbs = "\(Int(m.c.rounded()))"
         protein = "\(Int(m.p.rounded()))"
@@ -369,9 +419,9 @@ private enum PlateMix: String, CaseIterable, Identifiable {
     var display: String {
         switch self {
         case .balanced:      return "Mixed"
-        case .carbProtein:   return "Carb+Prot"
+        case .carbProtein:   return "Carb + Protein"
         case .mostlyCarb:    return "Mostly carb"
-        case .mostlyProtein: return "Mostly prot"
+        case .mostlyProtein: return "Mostly protein"
         case .dessertSnack:  return "Dessert"
         }
     }
@@ -454,10 +504,8 @@ private struct CameraPicker: UIViewControllerRepresentable {
             self.dismiss = dismiss
         }
 
-        func imagePickerController(
-            _ picker: UIImagePickerController,
-            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]
-        ) {
+        func imagePickerController(_ picker: UIImagePickerController,
+                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let img = info[.originalImage] as? UIImage {
                 onImage(img)
             }
