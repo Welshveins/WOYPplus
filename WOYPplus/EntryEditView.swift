@@ -9,6 +9,8 @@ struct EntryEditView: View {
     let day: Day
     let entry: Entry
 
+    @Query(sort: \Entry.createdAt, order: .reverse) private var allEntries: [Entry]
+
     @State private var title: String = ""
     @State private var kcal: String = ""
     @State private var carbs: String = ""
@@ -19,7 +21,9 @@ struct EntryEditView: View {
     // Recipe-linked servings
     @State private var servings: Double = 1.0
 
-    // Fractions you asked for
+    // Estimate state (editable)
+    @State private var isEstimate: Bool = false
+
     private let servingOptions: [Double] = [
         0.25, 0.5, 0.75,
         1.0,
@@ -35,7 +39,22 @@ struct EntryEditView: View {
                     TextField("Title", text: $title)
                 }
 
-                // ✅ If this entry came from a recipe, show servings control
+                // Estimate control
+                Section {
+                    Toggle("Estimate", isOn: $isEstimate)
+                } footer: {
+                    if isEstimate {
+                        Text("This entry is marked as an estimate. You can confirm it later.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Marked as confirmed.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                // Recipe-linked servings
                 if let recipe = entry.recipe {
                     Section("Servings") {
                         Picker("Servings", selection: $servings) {
@@ -44,11 +63,10 @@ struct EntryEditView: View {
                             }
                         }
                         .onChange(of: servings) { _, newValue in
-                            // Recalculate from whole-recipe totals
                             applyRecipe(recipe, servings: newValue)
                         }
 
-                        Text("Based on whole recipe totals.")
+                        Text("Based on recipe totals.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -62,9 +80,9 @@ struct EntryEditView: View {
                     numberField("Fibre (g)", text: $fibre)
                 }
 
-                if entry.isEstimate {
+                if entry.recipe != nil {
                     Section {
-                        Text("This entry is marked as an estimate.")
+                        Text("If you edit macros manually, this entry will no longer match the recipe exactly.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -81,9 +99,7 @@ struct EntryEditView: View {
                         .disabled(!canSave)
                 }
             }
-            .onAppear {
-                load()
-            }
+            .onAppear { load() }
         }
     }
 
@@ -103,7 +119,8 @@ struct EntryEditView: View {
         fat = format(entry.fatG)
         fibre = format(entry.fibreG)
 
-        // If linked, load servings (default 1)
+        isEstimate = entry.isEstimate
+
         if entry.recipe != nil {
             servings = entry.servings ?? 1.0
         }
@@ -116,7 +133,8 @@ struct EntryEditView: View {
     }
 
     private func save() {
-        entry.title = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? entry.title : title
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { entry.title = trimmed }
 
         entry.caloriesKcal = Double(kcal) ?? 0
         entry.carbsG = Double(carbs) ?? 0
@@ -124,17 +142,27 @@ struct EntryEditView: View {
         entry.fatG = Double(fat) ?? 0
         entry.fibreG = Double(fibre) ?? 0
 
-        // If recipe-linked, persist servings too
+        entry.isEstimate = isEstimate
+
         if entry.recipe != nil {
             entry.servings = servings
         }
 
         try? ctx.save()
+        refreshDayEstimateFlag()
         dismiss()
     }
 
+    private func refreshDayEstimateFlag() {
+        let sameDayEntries = allEntries.filter { e in
+            guard let d = e.day else { return false }
+            return Day.startOfDay(for: d.date) == Day.startOfDay(for: day.date)
+        }
+        day.hasEstimates = sameDayEntries.contains(where: { $0.isEstimate })
+        try? ctx.save()
+    }
+
     private func applyRecipe(_ recipe: Recipe, servings: Double) {
-        // This assumes Recipe macros are whole-recipe totals (your chosen architecture)
         kcal = format(recipe.caloriesKcal * servings)
         carbs = format(recipe.carbsG * servings)
         protein = format(recipe.proteinG * servings)
@@ -150,9 +178,7 @@ struct EntryEditView: View {
     }
 
     private func formatServing(_ v: Double) -> String {
-        if v.truncatingRemainder(dividingBy: 1) == 0 {
-            return "\(Int(v))"
-        }
+        if v.truncatingRemainder(dividingBy: 1) == 0 { return "\(Int(v))" }
         return String(v)
     }
 }
