@@ -1,3 +1,4 @@
+// AddPlateSheet.swift (FULL FILE REPLACEMENT)
 import SwiftUI
 import SwiftData
 import Vision
@@ -17,8 +18,14 @@ struct AddPlateSheet: View {
     @State private var mealSlot: MealSlot = MealSlot.defaultSlot(for: Date())
     @State private var userManuallyPickedSlot = false
 
+    // Persisted settings
+    @AppStorage("addPlate_cropToCentre") private var cropToCentre: Bool = true
+    @AppStorage("addPlate_plateMix") private var plateMixRaw: String = PlateMix.balanced.rawValue
+
+    // Keep simple state for segmented picker (prevents type-check blowups)
+    @State private var plateMix: PlateMix = .balanced
+
     // Photo
-    @State private var cropToCentre = true
     @State private var showingCamera = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var uiImage: UIImage?
@@ -26,6 +33,7 @@ struct AddPlateSheet: View {
     // Analysis
     @State private var isAnalysing = false
     @State private var analysisLabel: String?
+    @State private var lastSuggestedMacros: Macros?
 
     // Macros
     @State private var kcal: String = ""
@@ -34,108 +42,35 @@ struct AddPlateSheet: View {
     @State private var fat: String = ""
     @State private var fibre: String = ""
 
+    // Stop overwriting once user edits
+    @State private var userLockedMacros = false
+
     var body: some View {
         NavigationStack {
             Form {
-
-                // MARK: Photo
-                Section {
-
-                    if let image = uiImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxHeight: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    HStack(spacing: 12) {
-                        Button {
-                            showingCamera = true
-                        } label: {
-                            Label("Take photo", systemImage: "camera")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-
-                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                            Label("Choose photo", systemImage: "photo")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    Toggle("Focus on centre", isOn: $cropToCentre)
-                        .font(.footnote)
-
-                    if isAnalysing {
-                        HStack {
-                            ProgressView()
-                            Text("Analysing…")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if let analysisLabel {
-                        Text("Detected: \(analysisLabel)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                // MARK: Details
-                Section {
-                    TextField("Description (optional)", text: $title)
-                }
-
-                Section("When?") {
-                    DatePicker(
-                        "Date & time",
-                        selection: $when,
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
-                }
-
-                Section("Where does this belong?") {
-                    Picker("Meal", selection: $mealSlot) {
-                        Text("Breakfast").tag(MealSlot.breakfast)
-                        Text("Lunch").tag(MealSlot.lunch)
-                        Text("Dinner").tag(MealSlot.dinner)
-                        Text("Snacks").tag(MealSlot.snacks)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: mealSlot) { _, _ in
-                        userManuallyPickedSlot = true
-                    }
-                }
-
-                // MARK: Best guess
-                Section("Best guess") {
-                    numberField("kcal", text: $kcal)
-                    numberField("Carbs (g)", text: $carbs)
-                    numberField("Protein (g)", text: $protein)
-                    numberField("Fat (g)", text: $fat)
-                    numberField("Fibre (g)", text: $fibre)
-                }
-
-                Section {
-                    Text("This entry is marked as an estimate. You can confirm or edit it later.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+                photoSection
+                detailsSection
+                whenSection
+                mealSection
+                macrosSection
+                infoSection
             }
             .navigationTitle("Your plate")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(!canSave)
-                }
-            }
+            .toolbar { toolbarContent }
             .onAppear {
                 mealSlot = MealSlot.defaultSlot(for: when)
+                plateMix = PlateMix(rawValue: plateMixRaw) ?? .balanced
+            }
+            .onChange(of: plateMix) { _, newValue in
+                plateMixRaw = newValue.rawValue
+
+                // If we already have a suggestion, re-apply it through the new mix (unless user locked)
+                guard !userLockedMacros else { return }
+                if let s = lastSuggestedMacros {
+                    let adjusted = plateMix.apply(to: s)
+                    fill(adjusted, markUnlocked: false)
+                }
             }
             .onChange(of: when) { _, newValue in
                 guard !userManuallyPickedSlot else { return }
@@ -144,11 +79,152 @@ struct AddPlateSheet: View {
             .onChange(of: selectedPhotoItem) { _, newItem in
                 loadImage(newItem)
             }
+            // Lock when user edits any macro field
+            .onChange(of: kcal) { _, _ in userLockedMacros = true }
+            .onChange(of: carbs) { _, _ in userLockedMacros = true }
+            .onChange(of: protein) { _, _ in userLockedMacros = true }
+            .onChange(of: fat) { _, _ in userLockedMacros = true }
+            .onChange(of: fibre) { _, _ in userLockedMacros = true }
             .sheet(isPresented: $showingCamera) {
                 CameraPicker { image in
                     uiImage = image
                     runVision(on: image)
                 }
+            }
+        }
+    }
+
+    // MARK: - Sections
+
+    private var photoSection: some View {
+        Section {
+            if let image = uiImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
+            HStack(spacing: 12) {
+                Button { showingCamera = true } label: {
+                    Label("Take photo", systemImage: "camera")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                    Label("Choose photo", systemImage: "photo")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Toggle("Focus on centre", isOn: $cropToCentre)
+                .font(.footnote)
+
+            Picker("Plate mix", selection: $plateMix) {
+                ForEach(PlateMix.allCases) { m in
+                    Text(m.display).tag(m)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if isAnalysing {
+                HStack {
+                    ProgressView()
+                    Text("Analysing…")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let analysisLabel {
+                Text("Detected: \(analysisLabel)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var detailsSection: some View {
+        Section {
+            TextField("Description (optional)", text: $title)
+        }
+    }
+
+    private var whenSection: some View {
+        Section("When?") {
+            DatePicker(
+                "Date & time",
+                selection: $when,
+                displayedComponents: [.date, .hourAndMinute]
+            )
+        }
+    }
+
+    private var mealSection: some View {
+        Section("Where does this belong?") {
+            Picker("Meal", selection: $mealSlot) {
+                Text("Breakfast").tag(MealSlot.breakfast)
+                Text("Lunch").tag(MealSlot.lunch)
+                Text("Dinner").tag(MealSlot.dinner)
+                Text("Snacks").tag(MealSlot.snacks)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: mealSlot) { _, _ in
+                userManuallyPickedSlot = true
+            }
+        }
+    }
+
+    private var macrosSection: some View {
+        Section("Best guess") {
+
+            if userLockedMacros {
+                HStack {
+                    Image(systemName: "lock.fill")
+                        .foregroundStyle(.secondary)
+                    Text("Your edits are locked (Vision won’t overwrite).")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            numberField("kcal", text: $kcal)
+            numberField("Carbs (g)", text: $carbs)
+            numberField("Protein (g)", text: $protein)
+            numberField("Fat (g)", text: $fat)
+            numberField("Fibre (g)", text: $fibre)
+
+            if lastSuggestedMacros != nil {
+                Button {
+                    userLockedMacros = false
+                    if let s = lastSuggestedMacros {
+                        let adjusted = plateMix.apply(to: s)
+                        fill(adjusted, markUnlocked: true)
+                    }
+                } label: {
+                    Label("Re-apply estimate", systemImage: "wand.and.stars")
+                }
+            }
+        }
+    }
+
+    private var infoSection: some View {
+        Section {
+            Text("This entry is marked as an estimate. You can confirm or edit it later.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var toolbarContent: some ToolbarContent {
+        Group {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { save() }
+                    .disabled(!canSave)
             }
         }
     }
@@ -161,9 +237,7 @@ struct AddPlateSheet: View {
         Task {
             if let data = try? await item.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
-                await MainActor.run {
-                    uiImage = image
-                }
+                await MainActor.run { uiImage = image }
                 runVision(on: image)
             }
         }
@@ -171,12 +245,12 @@ struct AddPlateSheet: View {
 
     private func runVision(on image: UIImage) {
         let input = cropToCentre ? image.centerSquareCropped() : image
-
         guard let cg = input.cgImage else { return }
 
         DispatchQueue.main.async {
             isAnalysing = true
             analysisLabel = nil
+            lastSuggestedMacros = nil
         }
 
         let request = VNClassifyImageRequest { request, _ in
@@ -185,53 +259,29 @@ struct AddPlateSheet: View {
                 return
             }
 
-            let bannedWords = [
-                "structure", "pattern", "text", "font",
-                "table", "floor", "room", "wood", "product"
-            ]
+            // Build a multi-label list for mixed-plate tagging
+            let labels: [PlateMacroTagger.Label] = results
+                .prefix(20)
+                .map { PlateMacroTagger.Label(identifier: $0.identifier, confidence: Double($0.confidence)) }
 
-            let foodHints = [
-                "food","chocolate","bar","snack","pizza","burger","sandwich","wrap","burrito",
-                "pasta","noodle","rice","bread","toast","cake","biscuit","cookie","fruit",
-                "banana","apple","salad","yogurt","yoghurt","cheese","egg","chicken","beef","fish",
-                "chips","fries","ice cream","curry","soup","oats","porridge","cereal"
-            ]
-
-            let candidates = Array(results.prefix(20))
-
-            func isBanned(_ id: String) -> Bool {
-                let lower = id.lowercased()
-                return bannedWords.contains(where: { lower.contains($0) })
-            }
-
-            // Prefer anything that looks food-ish, otherwise take best non-banned label.
-            let bestFood = candidates.first(where: { obs in
-                let id = obs.identifier
-                if obs.confidence < 0.10 { return false }
-                if isBanned(id) { return false }
-                let lower = id.lowercased()
-                return foodHints.contains(where: { lower.contains($0) })
-            })
-
-            let bestFallback = candidates.first(where: { obs in
-                let id = obs.identifier
-                if obs.confidence < 0.15 { return false }
-                if isBanned(id) { return false }
-                return true
-            })
-
-            let best = bestFood ?? bestFallback
+            let estimate = PlateMacroTagger.estimate(from: labels)
+            let base = Macros(
+                k: estimate.macros.k,
+                c: estimate.macros.c,
+                p: estimate.macros.p,
+                f: estimate.macros.f,
+                fi: estimate.macros.fi
+            )
+            let adjusted = plateMix.apply(to: base)
 
             DispatchQueue.main.async {
                 isAnalysing = false
 
-                guard let best else {
-                    analysisLabel = "Unknown"
-                    return
-                }
+                analysisLabel = estimate.detectedSummary
+                lastSuggestedMacros = base
 
-                analysisLabel = "\(best.identifier) (\(Int(best.confidence * 100))%)"
-                applyHeuristic(for: best.identifier)
+                guard !userLockedMacros else { return }
+                fill(adjusted, markUnlocked: true)
             }
         }
 
@@ -241,49 +291,13 @@ struct AddPlateSheet: View {
         }
     }
 
-    // MARK: - Heuristic mapping (simple v1)
-
-    private func applyHeuristic(for label: String) {
-        // Don’t overwrite if user has already typed values.
-        let alreadyHasNumbers =
-            (Double(kcal) ?? 0) > 0 ||
-            (Double(carbs) ?? 0) > 0 ||
-            (Double(protein) ?? 0) > 0 ||
-            (Double(fat) ?? 0) > 0
-
-        guard !alreadyHasNumbers else { return }
-
-        let lower = label.lowercased()
-
-        if lower.contains("chocolate") || lower.contains("candy") || lower.contains("sweet") {
-            fill(k: 260, c: 30, p: 3, f: 14, fi: 2)
-            return
-        }
-
-        if lower.contains("pizza") {
-            fill(k: 800, c: 90, p: 35, f: 35, fi: 5)
-        } else if lower.contains("salad") {
-            fill(k: 350, c: 20, p: 15, f: 25, fi: 6)
-        } else if lower.contains("burger") {
-            fill(k: 750, c: 60, p: 40, f: 45, fi: 4)
-        } else if lower.contains("pasta") || lower.contains("noodle") {
-            fill(k: 700, c: 100, p: 25, f: 20, fi: 5)
-        } else if lower.contains("rice") {
-            fill(k: 600, c: 110, p: 15, f: 10, fi: 3)
-        } else if lower.contains("sandwich") || lower.contains("wrap") {
-            fill(k: 550, c: 55, p: 25, f: 22, fi: 5)
-        } else {
-            // Generic meal prior
-            fill(k: 600, c: 60, p: 30, f: 25, fi: 5)
-        }
-    }
-
-    private func fill(k: Double, c: Double, p: Double, f: Double, fi: Double) {
-        kcal = "\(Int(k.rounded()))"
-        carbs = "\(Int(c.rounded()))"
-        protein = "\(Int(p.rounded()))"
-        fat = "\(Int(f.rounded()))"
-        fibre = "\(Int(fi.rounded()))"
+    private func fill(_ m: Macros, markUnlocked: Bool) {
+        if markUnlocked { userLockedMacros = false }
+        kcal = "\(Int(m.k.rounded()))"
+        carbs = "\(Int(m.c.rounded()))"
+        protein = "\(Int(m.p.rounded()))"
+        fat = "\(Int(m.f.rounded()))"
+        fibre = "\(Int(m.fi.rounded()))"
     }
 
     // MARK: - Save
@@ -296,7 +310,6 @@ struct AddPlateSheet: View {
         return (k > 0) || (c + p + f > 0)
     }
 
-    @ViewBuilder
     private func numberField(_ label: String, text: Binding<String>) -> some View {
         TextField(label, text: text)
             .keyboardType(.decimalPad)
@@ -333,17 +346,82 @@ struct AddPlateSheet: View {
             day: targetDay
         )
 
-        // Make it land in the chosen time/day
         entry.createdAt = when
-
         ctx.insert(entry)
 
-        // Asterisk on macro wheel day
         targetDay.hasEstimates = true
-
         try? ctx.save()
         dismiss()
     }
+}
+
+// MARK: - Plate mix
+
+private enum PlateMix: String, CaseIterable, Identifiable {
+    case balanced
+    case carbProtein
+    case mostlyCarb
+    case mostlyProtein
+    case dessertSnack
+
+    var id: String { rawValue }
+
+    var display: String {
+        switch self {
+        case .balanced:      return "Mixed"
+        case .carbProtein:   return "Carb+Prot"
+        case .mostlyCarb:    return "Mostly carb"
+        case .mostlyProtein: return "Mostly prot"
+        case .dessertSnack:  return "Dessert"
+        }
+    }
+
+    func apply(to base: Macros) -> Macros {
+        switch self {
+        case .balanced:
+            return base
+        case .carbProtein:
+            return Macros(
+                k: base.k * 1.08,
+                c: base.c * 1.02,
+                p: base.p * 1.18,
+                f: base.f * 1.05,
+                fi: max(2, base.fi - 1)
+            )
+        case .mostlyCarb:
+            return Macros(
+                k: base.k * 1.05,
+                c: base.c * 1.25,
+                p: base.p * 0.80,
+                f: base.f * 0.95,
+                fi: base.fi
+            )
+        case .mostlyProtein:
+            return Macros(
+                k: base.k * 1.05,
+                c: base.c * 0.70,
+                p: base.p * 1.35,
+                f: base.f * 1.10,
+                fi: base.fi
+            )
+        case .dessertSnack:
+            return Macros(
+                k: base.k * 0.75,
+                c: base.c * 1.10,
+                p: max(2, base.p * 0.55),
+                f: base.f * 1.10,
+                fi: max(1, base.fi * 0.6)
+            )
+        }
+    }
+}
+
+private struct Macros {
+    var k: Double
+    var c: Double
+    var p: Double
+    var f: Double
+    var fi: Double
 }
 
 // MARK: - Camera (real device)
@@ -376,8 +454,10 @@ private struct CameraPicker: UIViewControllerRepresentable {
             self.dismiss = dismiss
         }
 
-        func imagePickerController(_ picker: UIImagePickerController,
-                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]
+        ) {
             if let img = info[.originalImage] as? UIImage {
                 onImage(img)
             }
@@ -390,7 +470,7 @@ private struct CameraPicker: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Simple centre crop (orientation-safe)
+// MARK: - Centre crop (orientation-safe)
 
 private extension UIImage {
     func centerSquareCropped() -> UIImage {
