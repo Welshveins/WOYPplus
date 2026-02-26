@@ -11,13 +11,52 @@ enum RecipeShareImport {
         // Only handles our share format
         let payload = try dec.decode(RecipeSharePayload.self, from: data)
         guard payload.schema == RecipeShareCodec.schema else {
-            throw NSError(domain: "WOYPplus", code: 1, userInfo: [NSLocalizedDescriptionKey: "Not a WOYPplus recipe file."])
+            throw NSError(
+                domain: "WOYPplus",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Not a WOYPplus recipe file."]
+            )
         }
 
-        // De-dupe by fingerprint
-        let fp = payload.sourceFingerprint
-        let existing = try ctx.fetch(FetchDescriptor<Recipe>(predicate: #Predicate { $0.sourceFingerprint == fp }))
-        if !existing.isEmpty {
+        // Canonical fingerprint (do NOT trust the incoming fingerprint)
+        let canonicalFP = RecipeFingerprint.make(
+            title: payload.title,
+            categoryRaw: payload.categoryRaw,
+            caloriesKcal: payload.caloriesKcal,
+            carbsG: payload.carbsG,
+            proteinG: payload.proteinG,
+            fatG: payload.fatG,
+            fibreG: payload.fibreG
+        )
+
+        // Load existing recipes once and de-dupe robustly
+        let existingRecipes = (try? ctx.fetch(FetchDescriptor<Recipe>())) ?? []
+
+        // 1) Raw stored fingerprints (covers same-version imports)
+        let rawFPs = Set(existingRecipes.map { $0.sourceFingerprint })
+
+        // 2) Canonical fingerprints computed from what’s already in the DB
+        var canonicalFPs = Set<String>()
+        canonicalFPs.reserveCapacity(existingRecipes.count)
+
+        var didMigrateAny = false
+        for r in existingRecipes {
+            let fp = RecipeFingerprint.fromRecipe(r)
+            canonicalFPs.insert(fp)
+
+            // Optional: migrate stored fingerprint to canonical if it’s different.
+            // This improves future de-dupe across all import paths.
+            if r.sourceFingerprint != fp {
+                r.sourceFingerprint = fp
+                didMigrateAny = true
+            }
+        }
+        if didMigrateAny {
+            try? ctx.save()
+        }
+
+        // De-dupe: block if it matches either style
+        if rawFPs.contains(payload.sourceFingerprint) || canonicalFPs.contains(canonicalFP) {
             return false
         }
 
@@ -35,6 +74,7 @@ enum RecipeShareImport {
 
         let photoData: Data? = payload.photoDataBase64.flatMap { Data(base64Encoded: $0) }
 
+        // IMPORTANT: store the CANONICAL fingerprint (not the incoming one)
         let recipe = Recipe(
             title: payload.title,
             categoryRaw: payload.categoryRaw,
@@ -43,7 +83,7 @@ enum RecipeShareImport {
             proteinG: payload.proteinG,
             fatG: payload.fatG,
             fibreG: payload.fibreG,
-            sourceFingerprint: payload.sourceFingerprint,
+            sourceFingerprint: canonicalFP,
             photoData: photoData,
             ingredients: ingredients
         )
@@ -53,3 +93,6 @@ enum RecipeShareImport {
         return true
     }
 }
+
+// MARK: - Canonical fingerprint helper (lives in this file)
+

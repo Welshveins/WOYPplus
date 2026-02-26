@@ -6,11 +6,13 @@ struct DataBackupView: View {
 
     @Environment(\.modelContext) private var ctx
 
-    @State private var exportData: Data?
-    @State private var showingRecipeExporter = false
-    @State private var showingAllDataExporter = false
-    @State private var showingImporter = false
+    // Single exporter state
+    @State private var exportData: Data = Data()
+    @State private var exportFilename: String = "WOYP_Backup"
+    @State private var showingExporter = false
 
+    // Import + alerts
+    @State private var showingImporter = false
     @State private var alertTitle = ""
     @State private var alertMessage = ""
     @State private var showAlert = false
@@ -64,22 +66,19 @@ struct DataBackupView: View {
         .navigationTitle("Backup & Restore")
         .navigationBarTitleDisplayMode(.inline)
 
-        // Exporters
+        // ✅ ONE exporter only (prevents SwiftUI state conflicts)
         .fileExporter(
-            isPresented: $showingRecipeExporter,
-            document: BackupDocument(data: exportData ?? Data()),
+            isPresented: $showingExporter,
+            document: BackupDocument(data: exportData),
             contentType: .json,
-            defaultFilename: "WOYP_RecipeLibrary"
-        ) { _ in }
+            defaultFilename: exportFilename
+        ) { result in
+            showingExporter = false
+            if case .failure(let error) = result {
+                show("Export failed", error.localizedDescription)
+            }
+        }
 
-        .fileExporter(
-            isPresented: $showingAllDataExporter,
-            document: BackupDocument(data: exportData ?? Data()),
-            contentType: .json,
-            defaultFilename: "WOYP_AllData"
-        ) { _ in }
-
-        // Importer
         .fileImporter(
             isPresented: $showingImporter,
             allowedContentTypes: [.json],
@@ -95,21 +94,34 @@ struct DataBackupView: View {
         }
     }
 
-    // MARK: Export
+    // MARK: - Export
 
     private func exportRecipeLibrary() {
-
         let recipes = (try? ctx.fetch(FetchDescriptor<Recipe>())) ?? []
+
+        guard !recipes.isEmpty else {
+            show("No recipes to export", "Your recipe library is empty.")
+            return
+        }
+
         let payload = recipes.map { BackupRecipeDTO(from: $0) }
 
-        if let data = try? JSONEncoder().encode(payload) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(payload)
+
             exportData = data
-            showingRecipeExporter = true
+            exportFilename = "WOYP_RecipeLibrary"
+
+            showingExporter = false
+            DispatchQueue.main.async { showingExporter = true }
+        } catch {
+            show("Export failed", error.localizedDescription)
         }
     }
 
     private func exportAllData() {
-
         let days = (try? ctx.fetch(FetchDescriptor<Day>())) ?? []
         let entries = (try? ctx.fetch(FetchDescriptor<Entry>())) ?? []
         let recipes = (try? ctx.fetch(FetchDescriptor<Recipe>())) ?? []
@@ -120,18 +132,25 @@ struct DataBackupView: View {
             recipes: recipes.map { BackupRecipeDTO(from: $0) }
         )
 
-        if let data = try? JSONEncoder().encode(payload) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(payload)
+
             exportData = data
-            showingAllDataExporter = true
+            exportFilename = "WOYP_AllData"
+
+            showingExporter = false
+            DispatchQueue.main.async { showingExporter = true }
+        } catch {
+            show("Export failed", "Could not encode All Data backup.")
         }
     }
 
-    // MARK: Import
+    // MARK: - Import
 
     private func handleImport(_ result: Result<[URL], Error>) {
-
         switch result {
-
         case .failure(let error):
             show("Import failed", error.localizedDescription)
 
@@ -144,14 +163,12 @@ struct DataBackupView: View {
 
                 let data = try Data(contentsOf: url)
 
-                // Try full restore first
                 if let full = try? JSONDecoder().decode(BackupAllDataDTO.self, from: data) {
                     restoreAllData(full)
                     show("Restore complete", "All data restored.")
                     return
                 }
 
-                // Try recipe-only restore
                 if let recipes = try? JSONDecoder().decode([BackupRecipeDTO].self, from: data) {
                     restoreRecipes(recipes)
                     show("Restore complete", "Recipes restored.")
@@ -159,26 +176,68 @@ struct DataBackupView: View {
                 }
 
                 show("Import failed", "File format not recognised.")
-
             } catch {
                 show("Import failed", error.localizedDescription)
             }
         }
     }
 
-    // MARK: Restore
+    // MARK: - Restore (with de-dupe)
 
     private func restoreRecipes(_ dtos: [BackupRecipeDTO]) {
-        for dto in dtos {
-            ctx.insert(dto.toModel())
+
+        // Build canonical fingerprints from existing recipes (robust against old UUID fingerprints)
+        var existingCanonical = Set<String>()
+        let existing = (try? ctx.fetch(FetchDescriptor<Recipe>())) ?? []
+        existingCanonical.reserveCapacity(existing.count)
+
+        var didMigrateAny = false
+        for r in existing {
+            let fp = RecipeFingerprint.fromRecipe(r)
+            existingCanonical.insert(fp)
+            if r.sourceFingerprint != fp {
+                r.sourceFingerprint = fp
+                didMigrateAny = true
+            }
         }
+        if didMigrateAny { try? ctx.save() }
+
+        // Insert only new
+        var inserted = 0
+        for dto in dtos {
+            let fp = RecipeFingerprint.make(
+                title: dto.title,
+                categoryRaw: dto.categoryRaw,
+                caloriesKcal: dto.caloriesKcal,
+                carbsG: dto.carbsG,
+                proteinG: dto.proteinG,
+                fatG: dto.fatG,
+                fibreG: dto.fibreG
+            )
+
+            if existingCanonical.contains(fp) { continue }
+            existingCanonical.insert(fp)
+
+            ctx.insert(dto.toModel(fingerprint: fp))
+            inserted += 1
+        }
+
         try? ctx.save()
+
+        if inserted == 0 {
+            // optional: quiet UX; no alert here, caller already shows "Recipes restored."
+        }
     }
 
     private func restoreAllData(_ dto: BackupAllDataDTO) {
+
+        // Days/entries logic left as-is (your all-data restore works well)
         dto.days.forEach { ctx.insert($0.toModel()) }
-        dto.recipes.forEach { ctx.insert($0.toModel()) }
         dto.entries.forEach { ctx.insert($0.toModel()) }
+
+        // Recipes: de-dupe using canonical fingerprint
+        restoreRecipes(dto.recipes)
+
         try? ctx.save()
     }
 
@@ -188,7 +247,7 @@ struct DataBackupView: View {
         showAlert = true
     }
 
-    // MARK: UI
+    // MARK: - UI
 
     private func actionRow(systemImage: String, title: String) -> some View {
         HStack(spacing: 12) {
@@ -210,96 +269,11 @@ struct DataBackupView: View {
                 .fill(Color.woypSlate.opacity(0.08))
         )
     }
-
-    // MARK: DTOs
-
-    struct BackupRecipeDTO: Codable {
-        var title: String
-        var categoryRaw: String
-        var caloriesKcal: Double
-        var carbsG: Double
-        var proteinG: Double
-        var fatG: Double
-        var fibreG: Double
-
-        init(from r: Recipe) {
-            title = r.title
-            categoryRaw = r.categoryRaw
-            caloriesKcal = r.caloriesKcal
-            carbsG = r.carbsG
-            proteinG = r.proteinG
-            fatG = r.fatG
-            fibreG = r.fibreG
-        }
-
-        func toModel() -> Recipe {
-            Recipe(
-                title: title,
-                categoryRaw: categoryRaw,
-                caloriesKcal: caloriesKcal,
-                carbsG: carbsG,
-                proteinG: proteinG,
-                fatG: fatG,
-                fibreG: fibreG,
-                sourceFingerprint: UUID().uuidString
-            )
-        }
-    }
-
-    struct BackupEntryDTO: Codable {
-        var title: String
-        var carbsG: Double
-        var proteinG: Double
-        var fatG: Double
-        var fibreG: Double
-        var caloriesKcal: Double
-        var isEstimate: Bool
-        var createdAt: Date
-
-        init(from e: Entry) {
-            title = e.title
-            carbsG = e.carbsG
-            proteinG = e.proteinG
-            fatG = e.fatG
-            fibreG = e.fibreG
-            caloriesKcal = e.caloriesKcal
-            isEstimate = e.isEstimate
-            createdAt = e.createdAt
-        }
-
-        func toModel() -> Entry {
-            Entry(
-                title: title,
-                mealSlot: .snacks, // note: backup currently doesn’t restore original slot
-                carbsG: carbsG,
-                proteinG: proteinG,
-                fatG: fatG,
-                fibreG: fibreG,
-                caloriesKcal: caloriesKcal,
-                isEstimate: isEstimate,
-                createdAt: createdAt
-            )
-        }
-    }
-
-    struct BackupDayDTO: Codable {
-        var date: Date
-
-        init(from d: Day) { date = d.date }
-
-        func toModel() -> Day { Day(date: date) }
-    }
-
-    struct BackupAllDataDTO: Codable {
-        var days: [BackupDayDTO]
-        var entries: [BackupEntryDTO]
-        var recipes: [BackupRecipeDTO]
-    }
 }
 
-// MARK: FileDocument (MUST be outside body modifier chain)
+// MARK: - FileDocument
 
-struct BackupDocument: FileDocument {
+private struct BackupDocument: FileDocument {
 
     static var readableContentTypes: [UTType] { [.json] }
 
@@ -316,4 +290,93 @@ struct BackupDocument: FileDocument {
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: data)
     }
+}
+
+// MARK: - DTOs
+
+private struct BackupRecipeDTO: Codable {
+    var title: String
+    var categoryRaw: String
+    var caloriesKcal: Double
+    var carbsG: Double
+    var proteinG: Double
+    var fatG: Double
+    var fibreG: Double
+
+    init(from r: Recipe) {
+        title = r.title
+        categoryRaw = r.categoryRaw
+        caloriesKcal = r.caloriesKcal
+        carbsG = r.carbsG
+        proteinG = r.proteinG
+        fatG = r.fatG
+        fibreG = r.fibreG
+    }
+
+    func toModel(fingerprint: String) -> Recipe {
+        Recipe(
+            title: title,
+            categoryRaw: categoryRaw,
+            caloriesKcal: caloriesKcal,
+            carbsG: carbsG,
+            proteinG: proteinG,
+            fatG: fatG,
+            fibreG: fibreG,
+            sourceFingerprint: fingerprint
+        )
+    }
+}
+
+private struct BackupEntryDTO: Codable {
+    var title: String
+    var carbsG: Double
+    var proteinG: Double
+    var fatG: Double
+    var fibreG: Double
+    var caloriesKcal: Double
+    var isEstimate: Bool
+    var createdAt: Date
+
+    init(from e: Entry) {
+        title = e.title
+        carbsG = e.carbsG
+        proteinG = e.proteinG
+        fatG = e.fatG
+        fibreG = e.fibreG
+        caloriesKcal = e.caloriesKcal
+        isEstimate = e.isEstimate
+        createdAt = e.createdAt
+    }
+
+    func toModel() -> Entry {
+        Entry(
+            title: title,
+            mealSlot: .snacks,
+            carbsG: carbsG,
+            proteinG: proteinG,
+            fatG: fatG,
+            fibreG: fibreG,
+            caloriesKcal: caloriesKcal,
+            isEstimate: isEstimate,
+            createdAt: createdAt
+        )
+    }
+}
+
+private struct BackupDayDTO: Codable {
+    var date: Date
+
+    init(from d: Day) {
+        date = d.date
+    }
+
+    func toModel() -> Day {
+        Day(date: date)
+    }
+}
+
+private struct BackupAllDataDTO: Codable {
+    var days: [BackupDayDTO]
+    var entries: [BackupEntryDTO]
+    var recipes: [BackupRecipeDTO]
 }
