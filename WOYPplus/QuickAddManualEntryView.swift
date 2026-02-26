@@ -57,8 +57,7 @@ struct QuickAddManualEntryView: View {
 
     private func log() {
 
-        let slotToUse = useTimeBasedDefault ? MealSlot.slot(for: Date()) : mealSlot
-
+        let slotToUse = useTimeBasedDefault ? MealSlot.defaultSlot(for: Date()) : mealSlot
         let entry = Entry(
             title: title.isEmpty ? "Quick add" : title,
             mealSlot: slotToUse,

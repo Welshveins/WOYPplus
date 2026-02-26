@@ -12,15 +12,16 @@ struct TodayView: View {
     @State private var showingPlateSheet = false
     
     @State private var showingRecipeSlotPicker = false
-    @State private var recipeTargetSlot: MealSlot = .snacks
     @State private var showingRecipeLibrary = false
     
     @State private var showingQuickAddSlotPicker = false
-    @State private var quickAddTargetSlot: MealSlot = .snacks
+    @State private var recipeTargetSlot: MealSlot = MealTimeWindows.currentSlot()
+    @State private var quickAddTargetSlot: MealSlot = MealTimeWindows.currentSlot()
+    @State private var extrasTargetSlot: MealSlot = MealTimeWindows.currentSlot()
     @State private var showingQuickAddSheet = false
     
     @State private var showingExtrasSlotPicker = false
-    @State private var extrasTargetSlot: MealSlot = .snacks
+    
     @State private var showingExtrasSheet = false
     
     @State private var showingHelp = false

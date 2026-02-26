@@ -174,7 +174,7 @@ private struct BarcodeAmountAndLogView: View {
         let fat = (n.fat_100g ?? 0) * factor
         let fibre = (n.fiber_100g ?? 0) * factor
 
-        let slot = MealSlot.slot(for: Date())
+        let slot = MealSlot.defaultSlot(for: Date())
 
         let entry = Entry(
             title: product.displayName,

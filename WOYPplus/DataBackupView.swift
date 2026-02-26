@@ -11,11 +11,21 @@ struct DataBackupView: View {
     @State private var exportFilename: String = "WOYP_Backup"
     @State private var showingExporter = false
 
-    // Import + alerts
+    // Import flow
     @State private var showingImporter = false
+    @State private var pendingImportData: Data?
+    @State private var pendingImportSummary: ImportSummary?
+    @State private var confirmImport = false
+
+    // Alerts
     @State private var alertTitle = ""
     @State private var alertMessage = ""
     @State private var showAlert = false
+
+    // Trust indicators
+    @AppStorage("backup_lastRecipeExportAt") private var lastRecipeExportAt: Double = 0
+    @AppStorage("backup_lastAllDataExportAt") private var lastAllDataExportAt: Double = 0
+    @AppStorage("backup_lastImportAt") private var lastImportAt: Double = 0
 
     var body: some View {
 
@@ -42,6 +52,12 @@ struct DataBackupView: View {
                     )
                 }
                 .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    trustLine(label: "Last recipe export", timestamp: lastRecipeExportAt)
+                    trustLine(label: "Last all-data export", timestamp: lastAllDataExportAt)
+                }
+                .padding(.vertical, 6)
             }
 
             Section("Import") {
@@ -55,6 +71,9 @@ struct DataBackupView: View {
                     )
                 }
                 .buttonStyle(.plain)
+
+                trustLine(label: "Last import", timestamp: lastImportAt)
+                    .padding(.vertical, 6)
             }
 
             Section {
@@ -79,12 +98,32 @@ struct DataBackupView: View {
             }
         }
 
+        // Pick a file
         .fileImporter(
             isPresented: $showingImporter,
             allowedContentTypes: [.json],
             allowsMultipleSelection: false
         ) { result in
-            handleImport(result)
+            handlePickedFile(result)
+        }
+
+        // Confirm after preview
+        .confirmationDialog(
+            "Import backup?",
+            isPresented: $confirmImport,
+            titleVisibility: .visible
+        ) {
+            Button("Import", role: .destructive) {
+                performPendingImport()
+            }
+            Button("Cancel", role: .cancel) {
+                pendingImportData = nil
+                pendingImportSummary = nil
+            }
+        } message: {
+            if let s = pendingImportSummary {
+                Text(s.message)
+            }
         }
 
         .alert(alertTitle, isPresented: $showAlert) {
@@ -104,15 +143,21 @@ struct DataBackupView: View {
             return
         }
 
-        let payload = recipes.map { BackupRecipeDTO(from: $0) }
+        let payload = RecipeLibraryBackupV1(
+            schema: BackupSchemas.recipeLibraryV1,
+            exportedAt: Date(),
+            recipes: recipes.map { BackupRecipeDTO(from: $0) }
+        )
 
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(payload)
 
             exportData = data
             exportFilename = "WOYP_RecipeLibrary"
+            lastRecipeExportAt = Date().timeIntervalSince1970
 
             showingExporter = false
             DispatchQueue.main.async { showingExporter = true }
@@ -126,7 +171,9 @@ struct DataBackupView: View {
         let entries = (try? ctx.fetch(FetchDescriptor<Entry>())) ?? []
         let recipes = (try? ctx.fetch(FetchDescriptor<Recipe>())) ?? []
 
-        let payload = BackupAllDataDTO(
+        let payload = AllDataBackupV1(
+            schema: BackupSchemas.allDataV1,
+            exportedAt: Date(),
             days: days.map { BackupDayDTO(from: $0) },
             entries: entries.map { BackupEntryDTO(from: $0) },
             recipes: recipes.map { BackupRecipeDTO(from: $0) }
@@ -135,10 +182,12 @@ struct DataBackupView: View {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(payload)
 
             exportData = data
             exportFilename = "WOYP_AllData"
+            lastAllDataExportAt = Date().timeIntervalSince1970
 
             showingExporter = false
             DispatchQueue.main.async { showingExporter = true }
@@ -147,9 +196,9 @@ struct DataBackupView: View {
         }
     }
 
-    // MARK: - Import
+    // MARK: - Import (preview → confirm → import)
 
-    private func handleImport(_ result: Result<[URL], Error>) {
+    private func handlePickedFile(_ result: Result<[URL], Error>) {
         switch result {
         case .failure(let error):
             show("Import failed", error.localizedDescription)
@@ -163,30 +212,110 @@ struct DataBackupView: View {
 
                 let data = try Data(contentsOf: url)
 
-                if let full = try? JSONDecoder().decode(BackupAllDataDTO.self, from: data) {
-                    restoreAllData(full)
-                    show("Restore complete", "All data restored.")
-                    return
+                // Preview / classify
+                if let summary = makeSummary(for: data) {
+                    pendingImportData = data
+                    pendingImportSummary = summary
+                    confirmImport = true
+                } else {
+                    show("Import failed", "File format not recognised.")
                 }
-
-                if let recipes = try? JSONDecoder().decode([BackupRecipeDTO].self, from: data) {
-                    restoreRecipes(recipes)
-                    show("Restore complete", "Recipes restored.")
-                    return
-                }
-
-                show("Import failed", "File format not recognised.")
             } catch {
                 show("Import failed", error.localizedDescription)
             }
         }
     }
 
-    // MARK: - Restore (with de-dupe)
+    private func performPendingImport() {
+        guard let data = pendingImportData else { return }
+
+        defer {
+            pendingImportData = nil
+            pendingImportSummary = nil
+        }
+
+        // 1) New all-data V1
+        if let allV1 = tryDecode(AllDataBackupV1.self, from: data) {
+            restoreAllData(days: allV1.days, recipes: allV1.recipes, entries: allV1.entries)
+            lastImportAt = Date().timeIntervalSince1970
+            show("Restore complete", "All data restored.")
+            return
+        }
+
+        // 2) Old all-data (backwards compatible)
+        if let oldAll = tryDecode(BackupAllDataDTO.self, from: data) {
+            restoreAllData(days: oldAll.days, recipes: oldAll.recipes, entries: oldAll.entries)
+            lastImportAt = Date().timeIntervalSince1970
+            show("Restore complete", "All data restored.")
+            return
+        }
+
+        // 3) New recipe-library V1
+        if let libV1 = tryDecode(RecipeLibraryBackupV1.self, from: data) {
+            restoreRecipes(libV1.recipes)
+            lastImportAt = Date().timeIntervalSince1970
+            show("Restore complete", "Recipes restored.")
+            return
+        }
+
+        // 4) Old recipe-library array
+        if let recipes = tryDecode([BackupRecipeDTO].self, from: data) {
+            restoreRecipes(recipes)
+            lastImportAt = Date().timeIntervalSince1970
+            show("Restore complete", "Recipes restored.")
+            return
+        }
+
+        show("Import failed", "File format not recognised.")
+    }
+
+    private func makeSummary(for data: Data) -> ImportSummary? {
+
+        if let allV1 = tryDecode(AllDataBackupV1.self, from: data) {
+            return ImportSummary(
+                kind: "All Data",
+                message: "This backup contains:\n• \(allV1.days.count) days\n• \(allV1.entries.count) entries\n• \(allV1.recipes.count) recipes\n\nImport will add missing items and skip duplicates."
+            )
+        }
+
+        if let oldAll = tryDecode(BackupAllDataDTO.self, from: data) {
+            return ImportSummary(
+                kind: "All Data",
+                message: "This backup contains:\n• \(oldAll.days.count) days\n• \(oldAll.entries.count) entries\n• \(oldAll.recipes.count) recipes\n\nImport will add missing items and skip duplicates."
+            )
+        }
+
+        if let libV1 = tryDecode(RecipeLibraryBackupV1.self, from: data) {
+            return ImportSummary(
+                kind: "Recipe Library",
+                message: "This file contains:\n• \(libV1.recipes.count) recipes\n\nImport will add missing recipes and skip duplicates."
+            )
+        }
+
+        if let arr = tryDecode([BackupRecipeDTO].self, from: data) {
+            return ImportSummary(
+                kind: "Recipe Library",
+                message: "This file contains:\n• \(arr.count) recipes\n\nImport will add missing recipes and skip duplicates."
+            )
+        }
+
+        return nil
+    }
+
+    private func tryDecode<T: Decodable>(_ type: T.Type, from data: Data) -> T? {
+        do {
+            let dec = JSONDecoder()
+            dec.dateDecodingStrategy = .iso8601
+            return try dec.decode(type, from: data)
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - Restore (insert only if not already present)
 
     private func restoreRecipes(_ dtos: [BackupRecipeDTO]) {
-
-        // Build canonical fingerprints from existing recipes (robust against old UUID fingerprints)
+        // Canonical fingerprint de-dupe
         var existingCanonical = Set<String>()
         let existing = (try? ctx.fetch(FetchDescriptor<Recipe>())) ?? []
         existingCanonical.reserveCapacity(existing.count)
@@ -202,7 +331,6 @@ struct DataBackupView: View {
         }
         if didMigrateAny { try? ctx.save() }
 
-        // Insert only new
         var inserted = 0
         for dto in dtos {
             let fp = RecipeFingerprint.make(
@@ -223,23 +351,93 @@ struct DataBackupView: View {
         }
 
         try? ctx.save()
-
-        if inserted == 0 {
-            // optional: quiet UX; no alert here, caller already shows "Recipes restored."
-        }
+        // keep UX quiet; caller shows “Recipes restored.”
+        _ = inserted
     }
 
-    private func restoreAllData(_ dto: BackupAllDataDTO) {
+    private func restoreAllData(days: [BackupDayDTO], recipes: [BackupRecipeDTO], entries: [BackupEntryDTO]) {
+        // Days: de-dupe by start-of-day
+        let existingDays = (try? ctx.fetch(FetchDescriptor<Day>())) ?? []
+        var dayMap: [Date: Day] = [:]
+        dayMap.reserveCapacity(existingDays.count)
 
-        // Days/entries logic left as-is (your all-data restore works well)
-        dto.days.forEach { ctx.insert($0.toModel()) }
-        dto.entries.forEach { ctx.insert($0.toModel()) }
+        for d in existingDays {
+            let key = Day.startOfDay(for: d.date)
+            dayMap[key] = d
+        }
 
-        // Recipes: de-dupe using canonical fingerprint
-        restoreRecipes(dto.recipes)
+        for dto in days {
+            let key = Day.startOfDay(for: dto.date)
+            if dayMap[key] != nil { continue }
+            let newDay = dto.toModel()
+            ctx.insert(newDay)
+            dayMap[key] = newDay
+        }
+
+        // Recipes: reuse recipe restore logic
+        restoreRecipes(recipes)
+
+        // Entries: de-dupe by (createdAt + title + macros + mealSlot) approx
+        let existingEntries = (try? ctx.fetch(FetchDescriptor<Entry>())) ?? []
+        var existingEntryKeys = Set(existingEntries.map { EntryFingerprint.fromEntry($0) })
+
+        for dto in entries {
+            let key = EntryFingerprint.fromBackupValues(
+                title: dto.title,
+                mealSlotRaw: dto.mealSlotRaw,
+                carbsG: dto.carbsG,
+                proteinG: dto.proteinG,
+                fatG: dto.fatG,
+                fibreG: dto.fibreG,
+                caloriesKcal: dto.caloriesKcal,
+                isEstimate: dto.isEstimate,
+                createdAt: dto.createdAt
+            )
+            if existingEntryKeys.contains(key) { continue }
+            existingEntryKeys.insert(key)
+
+            let entry = dto.toModel()
+            // Attach to the correct day (if present); otherwise create it
+            let dayKey = Day.startOfDay(for: dto.createdAt)
+            let target = dayMap[dayKey] ?? {
+                let newDay = Day(date: dayKey)
+                ctx.insert(newDay)
+                dayMap[dayKey] = newDay
+                return newDay
+            }()
+            entry.day = target
+            ctx.insert(entry)
+        }
 
         try? ctx.save()
     }
+
+    // MARK: - Trust UI
+
+    private func trustLine(label: String, timestamp: Double) -> some View {
+        let text: String
+        if timestamp <= 0 {
+            text = "—"
+        } else {
+            let d = Date(timeIntervalSince1970: timestamp)
+            let df = DateFormatter()
+            df.dateStyle = .medium
+            df.timeStyle = .short
+            text = df.string(from: d)
+        }
+
+        return HStack {
+            Text(label)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(text)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Alerts
 
     private func show(_ title: String, _ message: String) {
         alertTitle = title
@@ -247,7 +445,7 @@ struct DataBackupView: View {
         showAlert = true
     }
 
-    // MARK: - UI
+    // MARK: - UI row
 
     private func actionRow(systemImage: String, title: String) -> some View {
         HStack(spacing: 12) {
@@ -292,7 +490,34 @@ private struct BackupDocument: FileDocument {
     }
 }
 
-// MARK: - DTOs
+// MARK: - Schemas / Headers
+
+private enum BackupSchemas {
+    static let recipeLibraryV1 = "woypplus.backup.recipeLibrary.v1"
+    static let allDataV1 = "woypplus.backup.allData.v1"
+}
+
+private struct RecipeLibraryBackupV1: Codable {
+    let schema: String
+    let exportedAt: Date
+    let recipes: [BackupRecipeDTO]
+}
+
+private struct AllDataBackupV1: Codable {
+    let schema: String
+    let exportedAt: Date
+    let days: [BackupDayDTO]
+    let entries: [BackupEntryDTO]
+    let recipes: [BackupRecipeDTO]
+}
+
+private struct ImportSummary: Identifiable {
+    let id = UUID()
+    let kind: String
+    let message: String
+}
+
+// MARK: - DTOs (kept stable)
 
 private struct BackupRecipeDTO: Codable {
     var title: String
@@ -329,6 +554,7 @@ private struct BackupRecipeDTO: Codable {
 
 private struct BackupEntryDTO: Codable {
     var title: String
+    var mealSlotRaw: String
     var carbsG: Double
     var proteinG: Double
     var fatG: Double
@@ -339,6 +565,7 @@ private struct BackupEntryDTO: Codable {
 
     init(from e: Entry) {
         title = e.title
+        mealSlotRaw = e.mealSlot.rawValue
         carbsG = e.carbsG
         proteinG = e.proteinG
         fatG = e.fatG
@@ -351,7 +578,7 @@ private struct BackupEntryDTO: Codable {
     func toModel() -> Entry {
         Entry(
             title: title,
-            mealSlot: .snacks,
+            mealSlot: MealSlot(rawValue: mealSlotRaw) ?? .snacks,
             carbsG: carbsG,
             proteinG: proteinG,
             fatG: fatG,
@@ -375,8 +602,11 @@ private struct BackupDayDTO: Codable {
     }
 }
 
+// Old format (backwards compatibility)
 private struct BackupAllDataDTO: Codable {
     var days: [BackupDayDTO]
     var entries: [BackupEntryDTO]
     var recipes: [BackupRecipeDTO]
 }
+
+

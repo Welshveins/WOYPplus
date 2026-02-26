@@ -8,7 +8,7 @@ struct RecipesBrowseView: View {
     @Environment(\.modelContext) private var ctx
     @Environment(\.dismiss) private var dismiss
 
-    // Keep the query simple + stable; we’ll sort A–Z in `filtered`.
+    // Simple query; we sort A–Z in `filtered`.
     @Query private var recipes: [Recipe]
 
     @State private var queryText = ""
@@ -89,6 +89,7 @@ struct RecipesBrowseView: View {
                             }
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing) {
+
                                 Button(role: .destructive) {
                                     delete(r)
                                 } label: {
@@ -109,6 +110,7 @@ struct RecipesBrowseView: View {
             .navigationTitle("Recipes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         dismiss()
@@ -123,7 +125,7 @@ struct RecipesBrowseView: View {
                 }
             }
 
-            // Import (WOYPPlus share format first, then existing formats)
+            // Import (WOYPPlus share format first, then Foundation)
             .fileImporter(
                 isPresented: $showingImporter,
                 allowedContentTypes: [.json],
@@ -132,16 +134,20 @@ struct RecipesBrowseView: View {
                 handleImport(result)
             }
 
-            // Recipe detail (browse/share)
+            // Browse/share detail screen (NOT logging)
             .sheet(item: $selectedRecipe) { r in
                 NavigationStack {
-                    RecipeDetailView(recipe: r) { recipeToEdit in
-                        selectedRecipe = nil
-                        editingRecipe = recipeToEdit
-                    } onDelete: { recipeToDelete in
-                        selectedRecipe = nil
-                        delete(recipeToDelete)
-                    }
+                    BrowseRecipeDetailView(
+                        recipe: r,
+                        onEdit: { recipeToEdit in
+                            selectedRecipe = nil
+                            editingRecipe = recipeToEdit
+                        },
+                        onDelete: { recipeToDelete in
+                            selectedRecipe = nil
+                            delete(recipeToDelete)
+                        }
+                    )
                 }
                 .presentationDetents([.large])
             }
@@ -184,7 +190,7 @@ struct RecipesBrowseView: View {
             do {
                 let data = try Data(contentsOf: url)
 
-                // 1) WOYPPlus share recipe (if you have this helper)
+                // 1) WOYP Plus share file
                 if let didImport = try? RecipeShareImport.importRecipe(from: data, into: ctx) {
                     show(
                         didImport ? "Recipe added" : "Already exists",
@@ -193,8 +199,7 @@ struct RecipesBrowseView: View {
                     return
                 }
 
-
-                // 3) Foundation export fallback
+                // 2) Foundation single recipe export fallback
                 if let didImport = try? FoundationRecipeImport.importRecipe(from: data, into: ctx) {
                     show(
                         didImport ? "Recipe added" : "Already exists",

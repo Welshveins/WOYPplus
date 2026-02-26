@@ -6,7 +6,8 @@ enum MealSlot: String, Codable, CaseIterable, Identifiable {
     case lunch
     case dinner
 
-    // IMPORTANT: keep the stored/raw value as "extras" so existing saved entries still decode.
+    // IMPORTANT: keep raw value as "extras"
+    // so previously saved entries still decode correctly
     case snacks = "extras"
 
     var id: String { rawValue }
@@ -20,20 +21,22 @@ enum MealSlot: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    // MARK: - Default meal-time logic (Foundation-style)
+    // MARK: - Default time-based assignment
+    //
+    // Breakfast 06:00–10:00
+    // Lunch     11:30–14:30
+    // Dinner    17:30–21:00
+    // Snacks    anything else
+    //
+    // Windows are [start, end) — inclusive start, exclusive end
 
-    /// Breakfast 06:00–10:00
-    /// Lunch 11:30–14:30
-    /// Dinner 17:30–21:00
-    /// Snacks = anything else
     static func defaultSlot(for date: Date, calendar: Calendar = .current) -> MealSlot {
 
         let minutes = minutesSinceMidnight(for: date, calendar: calendar)
 
-        // windows are [start, end) i.e. inclusive start, exclusive end
-        if inWindow(minutes, startH: 6, startM: 0, endH: 10, endM: 0) { return .breakfast }
+        if inWindow(minutes, startH: 6,  startM: 0,  endH: 10, endM: 0)  { return .breakfast }
         if inWindow(minutes, startH: 11, startM: 30, endH: 14, endM: 30) { return .lunch }
-        if inWindow(minutes, startH: 17, startM: 30, endH: 21, endM: 0) { return .dinner }
+        if inWindow(minutes, startH: 17, startM: 30, endH: 21, endM: 0)  { return .dinner }
 
         return .snacks
     }
@@ -53,26 +56,5 @@ enum MealSlot: String, Codable, CaseIterable, Identifiable {
         let start = startH * 60 + startM
         let end = endH * 60 + endM
         return minutes >= start && minutes < end
-    }
-}
-extension MealSlot {
-    // Hard windows (local time):
-    // Breakfast 06:00–10:00
-    // Lunch     11:30–14:30
-    // Dinner    17:30–21:00
-    // Snacks    otherwise
-    static func slot(for date: Date, calendar: Calendar = .current) -> MealSlot {
-        let minutes = calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)
-
-        func inRange(_ startH: Int, _ startM: Int, _ endH: Int, _ endM: Int) -> Bool {
-            let start = startH * 60 + startM
-            let end = endH * 60 + endM
-            return minutes >= start && minutes <= end
-        }
-
-        if inRange(6, 0, 10, 0) { return .breakfast }
-        if inRange(11, 30, 14, 30) { return .lunch }
-        if inRange(17, 30, 21, 0) { return .dinner }
-        return .snacks
     }
 }
