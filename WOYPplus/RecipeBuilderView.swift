@@ -6,23 +6,23 @@ struct RecipeBuilderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var ctx
 
-    // Optional edit mode
     let existingRecipe: Recipe?
 
     @State private var title: String = ""
     @State private var categoryRaw: String = "Dinner"
 
-    // Draft ingredients (built from Food library picks)
+    // NEW: servings this recipe makes
+    @State private var servings: Double = 1
+
     @State private var draftIngredients: [DraftIngredient] = []
 
-    // Sheet
     private enum ActiveSheet: Identifiable {
         case pickFood
         var id: String { "pickFood" }
     }
+
     @State private var activeSheet: ActiveSheet?
 
-    // Alerts
     @State private var alertTitle = ""
     @State private var alertMessage = ""
     @State private var showAlert = false
@@ -36,9 +36,7 @@ struct RecipeBuilderView: View {
             List {
 
                 detailsSection
-
                 ingredientsSection
-
                 totalsSection
             }
             .navigationTitle(existingRecipe == nil ? "New recipe" : "Edit recipe")
@@ -48,8 +46,10 @@ struct RecipeBuilderView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(existingRecipe == nil ? "Save" : "Update") { saveRecipe() }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draftIngredients.isEmpty)
+                    Button(existingRecipe == nil ? "Save" : "Update") {
+                        saveRecipe()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draftIngredients.isEmpty)
                 }
             }
             .onAppear { hydrateFromExistingIfNeeded() }
@@ -65,7 +65,7 @@ struct RecipeBuilderView: View {
                 }
             }
             .alert(alertTitle, isPresented: $showAlert) {
-                Button("OK", role: .cancel) { }
+                Button("OK", role: .cancel) {}
             } message: {
                 Text(alertMessage)
             }
@@ -76,12 +76,23 @@ struct RecipeBuilderView: View {
 
     private var detailsSection: some View {
         Section("Details") {
+
             TextField("Recipe name", text: $title)
 
             TextField("Category", text: $categoryRaw)
                 .textInputAutocapitalization(.words)
 
-            Text("Tip: categoryRaw drives filters (e.g. Breakfast/Lunch/Dinner/Snacks, Starter/Main/Dessert).")
+            Stepper(value: $servings, in: 1...24, step: 1) {
+                HStack {
+                    Text("Servings this makes")
+                    Spacer()
+                    Text("\(Int(servings))")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+
+            Text("Tip: categoryRaw drives filters (Breakfast/Lunch/Dinner/Snacks).")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -127,12 +138,23 @@ struct RecipeBuilderView: View {
     }
 
     private var totalsSection: some View {
-        Section("Totals") {
-            TotalsRow(title: "Calories", value: "\(Int(totalKcal.rounded())) kcal")
-            TotalsRow(title: "Carbs", value: "\(Int(totalCarbs.rounded())) g")
-            TotalsRow(title: "Protein", value: "\(Int(totalProtein.rounded())) g")
-            TotalsRow(title: "Fat", value: "\(Int(totalFat.rounded())) g")
-            TotalsRow(title: "Fibre", value: "\(Int(totalFibre.rounded())) g")
+        Group {
+            Section("Totals (full recipe)") {
+                TotalsRow(title: "Calories", value: "\(Int(totalKcal.rounded())) kcal")
+                TotalsRow(title: "Carbs", value: "\(Int(totalCarbs.rounded())) g")
+                TotalsRow(title: "Protein", value: "\(Int(totalProtein.rounded())) g")
+                TotalsRow(title: "Fat", value: "\(Int(totalFat.rounded())) g")
+                TotalsRow(title: "Fibre", value: "\(Int(totalFibre.rounded())) g")
+            }
+
+            Section("Per serving") {
+                let s = max(servings, 1)
+                TotalsRow(title: "Calories", value: "\(Int((totalKcal / s).rounded())) kcal")
+                TotalsRow(title: "Carbs", value: "\(Int((totalCarbs / s).rounded())) g")
+                TotalsRow(title: "Protein", value: "\(Int((totalProtein / s).rounded())) g")
+                TotalsRow(title: "Fat", value: "\(Int((totalFat / s).rounded())) g")
+                TotalsRow(title: "Fibre", value: "\(Int((totalFibre / s).rounded())) g")
+            }
         }
     }
 
@@ -141,15 +163,19 @@ struct RecipeBuilderView: View {
     private var totalKcal: Double {
         draftIngredients.reduce(0) { $0 + ($1.kcalPer100g * $1.amountGrams / 100.0) }
     }
+
     private var totalCarbs: Double {
         draftIngredients.reduce(0) { $0 + ($1.carbsPer100g * $1.amountGrams / 100.0) }
     }
+
     private var totalProtein: Double {
         draftIngredients.reduce(0) { $0 + ($1.proteinPer100g * $1.amountGrams / 100.0) }
     }
+
     private var totalFat: Double {
         draftIngredients.reduce(0) { $0 + ($1.fatPer100g * $1.amountGrams / 100.0) }
     }
+
     private var totalFibre: Double {
         draftIngredients.reduce(0) { $0 + ($1.fibrePer100g * $1.amountGrams / 100.0) }
     }
@@ -161,6 +187,7 @@ struct RecipeBuilderView: View {
 
         title = r.title
         categoryRaw = r.categoryRaw
+        servings = r.servings
 
         draftIngredients = r.ingredients.map { ing in
             DraftIngredient(
@@ -179,27 +206,19 @@ struct RecipeBuilderView: View {
     // MARK: - Draft ops
 
     private func addDraftIngredient(from pick: FoodPickResult) {
-        // FoodPickResult gives totals for the chosen grams,
-        // so convert back to /100g for storing as an ingredient.
         let g = max(0.0, pick.grams)
         guard g > 0 else { return }
-
-        let kcalPer100 = (pick.kcal / g) * 100.0
-        let carbsPer100 = (pick.carbsG / g) * 100.0
-        let proteinPer100 = (pick.proteinG / g) * 100.0
-        let fatPer100 = (pick.fatG / g) * 100.0
-        let fibrePer100 = (pick.fibreG / g) * 100.0
 
         draftIngredients.append(
             DraftIngredient(
                 id: UUID(),
                 name: pick.foodName,
                 amountGrams: g,
-                kcalPer100g: kcalPer100,
-                carbsPer100g: carbsPer100,
-                proteinPer100g: proteinPer100,
-                fatPer100g: fatPer100,
-                fibrePer100g: fibrePer100
+                kcalPer100g: (pick.kcal / g) * 100.0,
+                carbsPer100g: (pick.carbsG / g) * 100.0,
+                proteinPer100g: (pick.proteinG / g) * 100.0,
+                fatPer100g: (pick.fatG / g) * 100.0,
+                fibrePer100g: (pick.fibreG / g) * 100.0
             )
         )
     }
@@ -211,10 +230,11 @@ struct RecipeBuilderView: View {
     // MARK: - Save
 
     private func saveRecipe() {
+
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
 
-        let recipeIngredients: [RecipeIngredient] = draftIngredients.map { d in
+        let recipeIngredients = draftIngredients.map { d in
             RecipeIngredient(
                 name: d.name,
                 amountGrams: d.amountGrams,
@@ -225,6 +245,12 @@ struct RecipeBuilderView: View {
                 fibrePer100g: d.fibrePer100g
             )
         }
+
+        let perServingKcal = totalKcal / max(servings, 1)
+        let perServingCarbs = totalCarbs / max(servings, 1)
+        let perServingProtein = totalProtein / max(servings, 1)
+        let perServingFat = totalFat / max(servings, 1)
+        let perServingFibre = totalFibre / max(servings, 1)
 
         let fingerprint = makeFingerprint(
             name: trimmedTitle,
@@ -237,15 +263,15 @@ struct RecipeBuilderView: View {
         if let r = existingRecipe {
             r.title = trimmedTitle
             r.categoryRaw = categoryRaw
-            r.caloriesKcal = totalKcal
-            r.carbsG = totalCarbs
-            r.proteinG = totalProtein
-            r.fatG = totalFat
-            r.fibreG = totalFibre
+            r.servings = servings
+            r.caloriesKcal = perServingKcal
+            r.carbsG = perServingCarbs
+            r.proteinG = perServingProtein
+            r.fatG = perServingFat
+            r.fibreG = perServingFibre
             r.sourceFingerprint = fingerprint
             r.updatedAt = Date()
             r.ingredients = recipeIngredients
-
             try? ctx.save()
             dismiss()
             return
@@ -254,12 +280,13 @@ struct RecipeBuilderView: View {
         let recipe = Recipe(
             title: trimmedTitle,
             categoryRaw: categoryRaw,
-            caloriesKcal: totalKcal,
-            carbsG: totalCarbs,
-            proteinG: totalProtein,
-            fatG: totalFat,
-            fibreG: totalFibre,
+            servings: servings,            caloriesKcal: perServingKcal,
+            carbsG: perServingCarbs,
+            proteinG: perServingProtein,
+            fatG: perServingFat,
+            fibreG: perServingFibre,
             sourceFingerprint: fingerprint,
+            
             photoData: nil,
             ingredients: recipeIngredients
         )
@@ -279,13 +306,7 @@ struct RecipeBuilderView: View {
         let n = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         return "\(n)|\(Int(totalKcal.rounded()))|\(Int(totalCarbs.rounded()))|\(Int(totalProtein.rounded()))|\(Int(totalFat.rounded()))"
     }
-    private func deleteRecipe() {
-        guard let r = existingRecipe else { return }
-        ctx.delete(r)
-        try? ctx.save()
-        dismiss()
-    }}
-
+}
 
 // MARK: - Draft ingredient
 
@@ -300,7 +321,7 @@ private struct DraftIngredient: Identifiable, Hashable {
     var fibrePer100g: Double
 }
 
-// MARK: - Small UI helpers
+// MARK: - Totals row UI
 
 private struct TotalsRow: View {
     let title: String
@@ -310,7 +331,8 @@ private struct TotalsRow: View {
         HStack {
             Text(title)
             Spacer()
-            Text(value).foregroundStyle(.secondary)
+            Text(value)
+                .foregroundStyle(.secondary)
         }
     }
 }

@@ -6,11 +6,14 @@ final class Recipe {
 
     var createdAt: Date
     var updatedAt: Date
-
+    
     var title: String
 
     // Optional metadata (from Foundation export)
     var categoryRaw: String
+
+    // ✅ NEW: how many servings the cooked recipe makes
+    var servings: Double
 
     // Per serving (simple and consistent)
     var caloriesKcal: Double
@@ -31,6 +34,7 @@ final class Recipe {
     init(
         title: String,
         categoryRaw: String = "",
+        servings: Double = 1,
         caloriesKcal: Double,
         carbsG: Double,
         proteinG: Double,
@@ -44,11 +48,14 @@ final class Recipe {
     ) {
         self.title = title
         self.categoryRaw = categoryRaw
+        self.servings = max(1, servings)
+
         self.caloriesKcal = caloriesKcal
         self.carbsG = carbsG
         self.proteinG = proteinG
         self.fatG = fatG
         self.fibreG = fibreG
+
         self.sourceFingerprint = sourceFingerprint
         self.photoData = photoData
         self.ingredients = ingredients
@@ -57,7 +64,7 @@ final class Recipe {
     }
 }
 
-// MARK: - Ingredient model (new)
+// MARK: - Ingredient model
 
 @Model
 final class RecipeIngredient {
@@ -89,7 +96,7 @@ final class RecipeIngredient {
         self.fibrePer100g = fibrePer100g
     }
 
-    // Convenience (for totals if needed later)
+    // Convenience (whole-recipe totals)
     var kcal: Double { kcalPer100g * amountGrams / 100.0 }
     var carbsG: Double { carbsPer100g * amountGrams / 100.0 }
     var proteinG: Double { proteinPer100g * amountGrams / 100.0 }

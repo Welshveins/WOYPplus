@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct RecipeDetailView: View {
 
@@ -10,6 +11,16 @@ struct RecipeDetailView: View {
     let onDelete: (Recipe) -> Void
 
     @State private var shareURL: URL?
+
+    // MARK: Portion toggle
+    private enum MacroMode: String, CaseIterable, Identifiable {
+        case fullRecipe = "Full recipe"
+        case perPortion = "Per portion"
+        var id: String { rawValue }
+    }
+
+    @State private var macroMode: MacroMode = .fullRecipe
+    @State private var portions: Double = 1
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -35,15 +46,55 @@ struct RecipeDetailView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Per serving")
+                // ✅ Visible toggle card (this is what you’re missing on-screen)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Macros")
                         .font(.headline)
 
-                    Text("\(Int(recipe.caloriesKcal.rounded())) kcal • C \(Int(recipe.carbsG.rounded()))g • P \(Int(recipe.proteinG.rounded()))g • F \(Int(recipe.fatG.rounded()))g • Fibre \(Int(recipe.fibreG.rounded()))g")
+                    Picker("Macro mode", selection: $macroMode) {
+                        ForEach(MacroMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if macroMode == .perPortion {
+                        HStack {
+                            Text("Portions")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
+                            Stepper(value: $portions, in: 1...24, step: 1) {
+                                Text("\(Int(portions))")
+                                    .font(.subheadline.weight(.semibold))
+                                    .monospacedDigit()
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.woypSlate.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        )
+                )
+                .padding(.top, 6)
+
+                // Your macros line (kept exactly in your style)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(macroMode == .fullRecipe ? "Full recipe" : "Per portion")
+                        .font(.headline)
+
+                    Text(macroLine)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.top, 6)
 
                 if !recipe.ingredients.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
@@ -154,5 +205,19 @@ struct RecipeDetailView: View {
         .onAppear {
             shareURL = try? WOYPRecipeShareManager.makeShareURL(for: recipe)
         }
+    }
+
+    // MARK: - Macro formatting
+
+    private var macroLine: String {
+        let divisor = max(1, macroMode == .perPortion ? portions : 1)
+
+        let kcal = recipe.caloriesKcal / divisor
+        let c = recipe.carbsG / divisor
+        let p = recipe.proteinG / divisor
+        let f = recipe.fatG / divisor
+        let fi = recipe.fibreG / divisor
+
+        return "\(Int(kcal.rounded())) kcal • C \(Int(c.rounded()))g • P \(Int(p.rounded()))g • F \(Int(f.rounded()))g • Fibre \(Int(fi.rounded()))g"
     }
 }
