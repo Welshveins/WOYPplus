@@ -141,7 +141,7 @@ struct RecipeLibraryView: View {
         // New recipe
         .sheet(isPresented: $showingBuilder) {
             NavigationStack {
-                RecipeBuilderView()
+                RecipeBuilderView(defaultCategoryRaw: mealSlot.displayName)
             }
         }
 

@@ -3,16 +3,36 @@ import SwiftData
 
 struct FoodLibraryView: View {
 
+    enum Mode {
+        case all
+        case basics
+        case myFoods
+
+        var title: String {
+            switch self {
+            case .all: return "Foods"
+            case .basics: return "Basics"
+            case .myFoods: return "My foods"
+            }
+        }
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var ctx
 
     @Query(sort: \Food.name) private var foods: [Food]
 
+    let mode: Mode
     /// Returns a fully specified pick (foodName + grams + totals)
     let onPick: (FoodPickResult) -> Void
 
     @State private var queryText = ""
     @State private var selectedFood: Food?
+
+    init(mode: Mode = .all, onPick: @escaping (FoodPickResult) -> Void) {
+        self.mode = mode
+        self.onPick = onPick
+    }
 
     var body: some View {
         List {
@@ -21,21 +41,30 @@ struct FoodLibraryView: View {
                 TextField("Search foods", text: $queryText)
             }
 
-            if foods.isEmpty {
+            if filteredFoods.isEmpty {
                 Section {
-                    Text("No foods yet.")
+                    Text(emptyMessage)
                         .foregroundStyle(.secondary)
                 }
             } else {
-
-                Section("Foods") {
+                Section(mode.title) {
                     ForEach(filteredFoods) { f in
                         Button {
                             selectedFood = f
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(f.name)
-                                    .font(.headline)
+                                HStack {
+                                    Text(f.name)
+                                        .font(.headline)
+
+                                    Spacer()
+
+                                    if f.isUserCreated {
+                                        Text("My food")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
 
                                 Text("\(Int(f.kcalPer100g.rounded())) kcal per 100g")
                                     .font(.subheadline)
@@ -48,7 +77,7 @@ struct FoodLibraryView: View {
                 }
             }
         }
-        .navigationTitle("Foods")
+        .navigationTitle(mode.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -56,7 +85,7 @@ struct FoodLibraryView: View {
             }
         }
         .task {
-            // Ensures the library is populated even if you never opened TodayView first
+            // Ensures library is populated even if TodayView wasn't opened first
             FoodSeeder.seedIfNeeded(into: ctx)
         }
         .sheet(item: $selectedFood) { food in
@@ -89,10 +118,29 @@ struct FoodLibraryView: View {
         }
     }
 
+    private var emptyMessage: String {
+        switch mode {
+        case .all: return "No foods yet."
+        case .basics: return "No basics yet."
+        case .myFoods: return "No saved foods yet."
+        }
+    }
+
     private var filteredFoods: [Food] {
+        let base: [Food] = {
+            switch mode {
+            case .all:
+                return foods
+            case .basics:
+                return foods.filter { !$0.isUserCreated }
+            case .myFoods:
+                return foods.filter { $0.isUserCreated }
+            }
+        }()
+
         let q = queryText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return foods }
-        return foods.filter { $0.name.lowercased().contains(q) }
+        guard !q.isEmpty else { return base }
+        return base.filter { $0.name.lowercased().contains(q) }
     }
 }
 

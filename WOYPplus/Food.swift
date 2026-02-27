@@ -17,6 +17,12 @@ final class Food {
     var defaultPortionName: String?      // e.g. "1 medium potato"
     var defaultPortionGrams: Double?     // e.g. 180g
 
+    // NEW: allows filtering "Basics" vs "My foods"
+    var isUserCreated: Bool
+
+    // NEW: optional barcode stored for later lookup/UX
+    var barcode: String?
+
     var createdAt: Date
 
     init(
@@ -28,6 +34,8 @@ final class Food {
         fibrePer100g: Double,
         defaultPortionName: String? = nil,
         defaultPortionGrams: Double? = nil,
+        isUserCreated: Bool = false,
+        barcode: String? = nil,
         createdAt: Date = Date()
     ) {
         self.name = name
@@ -38,6 +46,8 @@ final class Food {
         self.fibrePer100g = fibrePer100g
         self.defaultPortionName = defaultPortionName
         self.defaultPortionGrams = defaultPortionGrams
+        self.isUserCreated = isUserCreated
+        self.barcode = barcode
         self.createdAt = createdAt
     }
 }
