@@ -1,13 +1,11 @@
 import SwiftUI
-import SwiftData
 
-struct BarcodeQuickAddView: View {
+struct BarcodeIngredientPickerView: View {
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var ctx
 
-    let day: Day
-    let mealSlot: MealSlot
+    /// Return a FoodPickResult back to RecipeBuilder (so it can become a DraftIngredient)
+    let onPick: (FoodPickResult) -> Void
 
     @State private var scannedCode: String?
     @State private var product: OFFProduct?
@@ -17,11 +15,10 @@ struct BarcodeQuickAddView: View {
     var body: some View {
         Group {
             if let product {
-                BarcodeAmountAndLogView(
-                    day: day,
-                    mealSlot: mealSlot,
-                    product: product
-                )
+                BarcodeAmountAndPickView(product: product) { pick in
+                    onPick(pick)
+                    dismiss()
+                }
             } else {
                 BarcodeScannerView { code in
                     scannedCode = code
@@ -29,9 +26,7 @@ struct BarcodeQuickAddView: View {
                 } onError: { msg in
                     error = msg
                 }
-                .overlay(alignment: .top) {
-                    headerOverlay
-                }
+                .overlay(alignment: .top) { headerOverlay }
                 .ignoresSafeArea()
             }
         }
@@ -91,14 +86,10 @@ struct BarcodeQuickAddView: View {
     }
 }
 
-private struct BarcodeAmountAndLogView: View {
+private struct BarcodeAmountAndPickView: View {
 
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var ctx
-
-    let day: Day
-    let mealSlot: MealSlot
     let product: OFFProduct
+    let onPick: (FoodPickResult) -> Void
 
     @State private var gramsText: String = "100"
 
@@ -137,14 +128,11 @@ private struct BarcodeAmountAndLogView: View {
                 row("Fibre (g)", n?.fiber_100g)
             }
         }
-        .navigationTitle("Quick add")
+        .navigationTitle("Add ingredient")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-            }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Log") { log() }
+                Button("Add") { pick() }
                     .disabled(!(n?.hasUsableCore ?? false))
             }
         }
@@ -154,42 +142,35 @@ private struct BarcodeAmountAndLogView: View {
         HStack {
             Text(label)
             Spacer()
-            Text(v.map { format($0) } ?? "—")
+            Text(v.map { "\(Int($0.rounded()))" } ?? "—")
                 .foregroundStyle(.secondary)
         }
     }
 
-    private func format(_ x: Double) -> String {
-        "\(Int(x.rounded()))"
-    }
-
-    private func log() {
+    private func pick() {
         guard let n = product.nutriments, n.hasUsableCore else { return }
 
         let grams = Double(gramsText.replacingOccurrences(of: ",", with: ".")) ?? 0
         let g = max(0, grams)
-        let factor = g / 100.0
+        guard g > 0 else { return }
 
-        let kcal = (n.energyKcal_100g ?? 0) * factor
-        let carbs = (n.carbohydrates_100g ?? 0) * factor
-        let protein = (n.proteins_100g ?? 0) * factor
-        let fat = (n.fat_100g ?? 0) * factor
-        let fibre = (n.fiber_100g ?? 0) * factor
+        let kcal = (n.energyKcal_100g ?? 0) * g / 100.0
+        let carbs = (n.carbohydrates_100g ?? 0) * g / 100.0
+        let protein = (n.proteins_100g ?? 0) * g / 100.0
+        let fat = (n.fat_100g ?? 0) * g / 100.0
+        let fibre = (n.fiber_100g ?? 0) * g / 100.0
 
-        let entry = Entry(
-            title: product.displayName,
-            mealSlot: mealSlot,
+        let pick = FoodPickResult(
+            foodName: product.displayName,
+            grams: g,
+            portionLabel: "Barcode",
+            kcal: kcal,
             carbsG: carbs,
             proteinG: protein,
             fatG: fat,
-            fibreG: fibre,
-            caloriesKcal: kcal,
-            isEstimate: false,
-            day: day
+            fibreG: fibre
         )
 
-        ctx.insert(entry)
-        try? ctx.save()
-        dismiss()
+        onPick(pick)
     }
 }

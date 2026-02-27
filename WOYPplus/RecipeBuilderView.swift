@@ -95,11 +95,12 @@ struct RecipeBuilderView: View {
                     }
 
                 case .scanBarcode:
+                    // ✅ FIX: this now does a real barcode lookup (OpenFoodFacts),
+                    // creates a Food with per-100g macros, and routes into portion selection.
                     NavigationStack {
-                        RecipeBarcodeCaptureView(
-                            onFound: { code in
-                                // route into manual entry with barcode prefilled
-                                activeSheet = .manualFood(prefillBarcode: code)
+                        RecipeBarcodeLookupView(
+                            onPickedFood: { food in
+                                activeSheet = .portion(food: food)
                             },
                             onCancel: { activeSheet = nil }
                         )
@@ -651,12 +652,12 @@ private struct FoodPickerListView: View {
 
         case .basics:
             // Heuristic: earliest foods are likely the seeded basics
-            let earliest = Array(foodsByCreatedAt.prefix(50))
+            let earliest = Array(foodsByCreatedAt.prefix(60))
             return earliest.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         case .myFoods:
             // Heuristic: newest foods are likely user-created
-            let latest = Array(foodsByCreatedAt.suffix(50))
+            let latest = Array(foodsByCreatedAt.suffix(80))
             return latest.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
     }
@@ -779,66 +780,136 @@ private struct ManualFoodEntryView: View {
 }
 
 //////////////////////////////////////////////////////////////////
-/// MARK: - Barcode capture (camera)
+/// MARK: - Barcode lookup (camera + OpenFoodFacts -> Food)
 //////////////////////////////////////////////////////////////////
 
-private struct RecipeBarcodeCaptureView: View {
+private struct RecipeBarcodeLookupView: View {
 
-    let onFound: (String) -> Void
+    @Environment(\.modelContext) private var ctx
+
+    let onPickedFood: (Food) -> Void
     let onCancel: () -> Void
 
     @State private var last = ""
+    @State private var scannedCode: String?
+    @State private var product: OFFProduct?
     @State private var errorText: String?
+    @State private var isLoading = false
 
     var body: some View {
-        ZStack {
-            BarcodeScannerRepresentable(
-                onFound: { code in
-                    guard !code.isEmpty else { return }
-                    if code != last {
-                        last = code
-                        onFound(code)
-                    }
-                },
-                onError: { err in
-                    errorText = err.localizedDescription
+        Group {
+            if let product {
+                foundProductView(product)
+            } else {
+                ZStack {
+                    BarcodeScannerRepresentable(
+                        onFound: { code in
+                            guard !code.isEmpty else { return }
+                            guard code != last else { return }
+                            last = code
+                            scannedCode = code
+                            lookup(code)
+                        },
+                        onError: { err in
+                            errorText = err.localizedDescription
+                        }
+                    )
+                    .ignoresSafeArea()
+
+                    overlay
                 }
-            )
-            .ignoresSafeArea()
-
-            VStack {
-                Spacer()
-
-                VStack(spacing: 10) {
-                    Text("Scan a barcode")
-                        .font(.headline)
-
-                    if let errorText {
-                        Text(errorText)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    } else {
-                        Text("Hold the barcode in the frame.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                .navigationTitle("Scan barcode")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { onCancel() }
                     }
-
-                    Button("Cancel") { onCancel() }
-                        .padding(.top, 4)
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.black.opacity(0.55))
-                )
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 22)
             }
         }
-        .navigationTitle("Scan barcode")
+    }
+
+    private var overlay: some View {
+        VStack {
+            Spacer()
+
+            VStack(spacing: 10) {
+                Text("Scan a barcode")
+                    .font(.headline)
+
+                if isLoading {
+                    Text("Looking up…")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else if let errorText {
+                    Text(errorText)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Hold the barcode in the frame.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button("Cancel") { onCancel() }
+                    .padding(.top, 4)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.black.opacity(0.55))
+            )
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 22)
+        }
+    }
+
+    private func foundProductView(_ product: OFFProduct) -> some View {
+        let n = product.nutriments
+
+        return Form {
+            Section("Product") {
+                Text(product.displayName)
+                if let b = product.brands, !b.isEmpty {
+                    Text(b)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let c = product.code, !c.isEmpty {
+                    Text("Barcode: \(c)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Per 100 g") {
+                row("kcal", n?.energyKcal_100g)
+                row("Carbs (g)", n?.carbohydrates_100g)
+                row("Protein (g)", n?.proteins_100g)
+                row("Fat (g)", n?.fat_100g)
+                row("Fibre (g)", n?.fiber_100g)
+            }
+
+            Section {
+                Button("Use as ingredient") {
+                    createFood(from: product)
+                }
+                .disabled(!(n?.hasUsableCore ?? false))
+
+                Button("Scan again") {
+                    self.product = nil
+                    self.scannedCode = nil
+                    self.errorText = nil
+                    self.isLoading = false
+                    self.last = ""
+                }
+                .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("Barcode found")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -846,7 +917,62 @@ private struct RecipeBarcodeCaptureView: View {
             }
         }
     }
+
+    private func row(_ label: String, _ v: Double?) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text(v.map { "\(Int($0.rounded()))" } ?? "—")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func lookup(_ code: String) {
+        Task {
+            isLoading = true
+            errorText = nil
+            defer { isLoading = false }
+
+            do {
+                if let p = try await OpenFoodFactsAPI.fetchByBarcode(code) {
+                    if let n = p.nutriments, n.hasUsableCore {
+                        product = p
+                    } else {
+                        errorText = "No usable nutrition data found."
+                    }
+                } else {
+                    errorText = "No product found."
+                }
+            } catch {
+                errorText = error.localizedDescription
+            }
+        }
+    }
+
+    private func createFood(from product: OFFProduct) {
+        guard let n = product.nutriments, n.hasUsableCore else { return }
+
+        let food = Food(
+            name: product.displayName,
+            kcalPer100g: n.energyKcal_100g ?? 0,
+            carbsPer100g: n.carbohydrates_100g ?? 0,
+            proteinPer100g: n.proteins_100g ?? 0,
+            fatPer100g: n.fat_100g ?? 0,
+            fibrePer100g: n.fiber_100g ?? 0,
+            defaultPortionName: nil,
+            defaultPortionGrams: nil
+        )
+
+        ctx.insert(food)
+        try? ctx.save()
+
+        onPickedFood(food)
+    }
 }
+
+//////////////////////////////////////////////////////////////////
+/// MARK: - Barcode capture (camera)
+//////////////////////////////////////////////////////////////////
 
 private struct BarcodeScannerRepresentable: UIViewControllerRepresentable {
 
