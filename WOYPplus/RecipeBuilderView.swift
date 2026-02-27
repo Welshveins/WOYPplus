@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 import AVFoundation
 
 struct RecipeBuilderView: View {
@@ -11,35 +13,41 @@ struct RecipeBuilderView: View {
 
     @State private var title: String = ""
     @State private var categoryRaw: String = "Dinner"
-
-    // Servings this recipe makes
     @State private var servings: Double = 1
-
     @State private var draftIngredients: [DraftIngredient] = []
 
-    // Add-ingredient flow
+    // Photo
+    @State private var showingCamera = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var uiImage: UIImage?
+    @State private var photoData: Data?
+
+    // Sheets
     private enum ActiveSheet: Identifiable {
-        case pickFood
-        case pickFoodMyFoods
+        case addIngredientSource
         case scanBarcode
         case manualFood(prefillBarcode: String?)
+        case pickBasics
+        case pickMyFoods
+        case pickAllFoods
         case portion(food: Food)
 
         var id: String {
             switch self {
-            case .pickFood: return "pickFood"
-            case .pickFoodMyFoods: return "pickFoodMyFoods"
+            case .addIngredientSource: return "addIngredientSource"
             case .scanBarcode: return "scanBarcode"
             case .manualFood(let code): return "manualFood-\(code ?? "nil")"
+            case .pickBasics: return "pickBasics"
+            case .pickMyFoods: return "pickMyFoods"
+            case .pickAllFoods: return "pickAllFoods"
             case .portion(let food): return "portion-\(food.persistentModelID)"
             }
         }
     }
+
     @State private var activeSheet: ActiveSheet?
 
-    @State private var showingAddIngredientMenu = false
-
-    // Alerts
+    // Alert
     @State private var alertTitle = ""
     @State private var alertMessage = ""
     @State private var showAlert = false
@@ -52,6 +60,7 @@ struct RecipeBuilderView: View {
     var body: some View {
         NavigationStack {
             List {
+                photoSection
                 detailsSection
                 ingredientsSection
                 totalsSection
@@ -63,71 +72,74 @@ struct RecipeBuilderView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(existingRecipe == nil ? "Save" : "Update") { saveRecipe() }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draftIngredients.isEmpty)
+                    Button(existingRecipe == nil ? "Save" : "Update") {
+                        saveRecipe()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draftIngredients.isEmpty)
                 }
             }
             .onAppear { hydrateFromExistingIfNeeded() }
-
-            // Add ingredient chooser
-            .confirmationDialog(
-                "Add ingredient",
-                isPresented: $showingAddIngredientMenu,
-                titleVisibility: .visible
-            ) {
-                Button("Scan barcode") { activeSheet = .scanBarcode }
-                Button("Manual entry") { activeSheet = .manualFood(prefillBarcode: nil) }
-                Button("Basics") { activeSheet = .pickFood }
-                Button("My foods") { activeSheet = .pickFoodMyFoods }
-                Button("Cancel", role: .cancel) {}
-            }
-
-            // Sheets
             .sheet(item: $activeSheet) { sheet in
                 switch sheet {
 
-                case .pickFood:
+                case .addIngredientSource:
                     NavigationStack {
-                        FoodLibraryView { pick in
-                            addDraftIngredient(from: pick)
-                            activeSheet = nil
-                        }
-                    }
-
-                case .pickFoodMyFoods:
-                    // For now this uses the same Food library list.
-                    // “My foods” are the ones you manually create (saved into Food).
-                    NavigationStack {
-                        FoodLibraryView { pick in
-                            addDraftIngredient(from: pick)
-                            activeSheet = nil
-                        }
-                        .navigationTitle("My foods")
+                        AddIngredientSourceView(
+                            onScanBarcode: { activeSheet = .scanBarcode },
+                            onManual: { activeSheet = .manualFood(prefillBarcode: nil) },
+                            onBasics: { activeSheet = .pickBasics },
+                            onMyFoods: { activeSheet = .pickMyFoods },
+                            onAllFoods: { activeSheet = .pickAllFoods },
+                            onClose: { activeSheet = nil }
+                        )
                     }
 
                 case .scanBarcode:
-                    RecipeBarcodeScannerView(
-                        onFound: { code in
-                            // route to manual entry with prefilled code
-                            activeSheet = .manualFood(prefillBarcode: code)
-                        },
-                        onError: { msg in
-                            alertTitle = "Barcode scanner"
-                            alertMessage = msg
-                            showAlert = true
+                    NavigationStack {
+                        RecipeBarcodeCaptureView(
+                            onFound: { code in
+                                // route into manual entry with barcode prefilled
+                                activeSheet = .manualFood(prefillBarcode: code)
+                            },
+                            onCancel: { activeSheet = nil }
+                        )
+                    }
+
+                case .manualFood(let prefill):
+                    NavigationStack {
+                        ManualFoodEntryView(prefillBarcode: prefill) { newFood in
+                            // after saving a Food, go straight to portion selection
+                            activeSheet = .portion(food: newFood)
+                        } onClose: {
                             activeSheet = nil
                         }
-                    )
+                    }
 
-                case .manualFood(let prefillBarcode):
+                case .pickBasics:
                     NavigationStack {
-                        ManualFoodEntryView(
-                            prefillBarcode: prefillBarcode,
-                            onSaved: { newFood in
-                                // after saving a Food, go straight to portion selection
-                                activeSheet = .portion(food: newFood)
-                            }
-                        )
+                        FoodPickerListView(mode: .basics) { food in
+                            activeSheet = .portion(food: food)
+                        } onClose: {
+                            activeSheet = nil
+                        }
+                    }
+
+                case .pickMyFoods:
+                    NavigationStack {
+                        FoodPickerListView(mode: .myFoods) { food in
+                            activeSheet = .portion(food: food)
+                        } onClose: {
+                            activeSheet = nil
+                        }
+                    }
+
+                case .pickAllFoods:
+                    NavigationStack {
+                        FoodPickerListView(mode: .allFoods) { food in
+                            activeSheet = .portion(food: food)
+                        } onClose: {
+                            activeSheet = nil
+                        }
                     }
 
                 case .portion(let food):
@@ -136,6 +148,8 @@ struct RecipeBuilderView: View {
                         initialGrams: food.defaultPortionGrams ?? 100
                     ) { grams in
                         let g = max(0, grams)
+                        guard g > 0 else { return }
+
                         let pick = FoodPickResult(
                             foodName: food.name,
                             grams: g,
@@ -146,12 +160,21 @@ struct RecipeBuilderView: View {
                             fatG: food.fatPer100g * g / 100.0,
                             fibreG: food.fibrePer100g * g / 100.0
                         )
+
                         addDraftIngredient(from: pick)
                         activeSheet = nil
                     }
                 }
             }
-
+            .sheet(isPresented: $showingCamera) {
+                CameraPicker { image in
+                    uiImage = image
+                    photoData = image.jpegData(compressionQuality: 0.85)
+                }
+            }
+            .onChange(of: selectedPhotoItem) { _, newItem in
+                loadImage(newItem)
+            }
             .alert(alertTitle, isPresented: $showAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -162,8 +185,58 @@ struct RecipeBuilderView: View {
 
     // MARK: - Sections
 
+    private var photoSection: some View {
+        Section("Photo") {
+
+            if let image = uiImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 190)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            } else {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.woypSlate.opacity(0.07))
+                    .frame(height: 190)
+                    .overlay(
+                        VStack(spacing: 8) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Text("Add a photo (optional)")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    )
+            }
+
+            HStack(spacing: 12) {
+                Button { showingCamera = true } label: {
+                    Label("Take photo", systemImage: "camera")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                    Label("Choose photo", systemImage: "photo")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if uiImage != nil {
+                Button(role: .destructive) {
+                    uiImage = nil
+                    photoData = nil
+                } label: {
+                    Label("Remove photo", systemImage: "trash")
+                }
+            }
+        }
+    }
+
     private var detailsSection: some View {
         Section("Details") {
+
             TextField("Recipe name", text: $title)
 
             TextField("Category", text: $categoryRaw)
@@ -217,7 +290,7 @@ struct RecipeBuilderView: View {
             }
 
             Button {
-                showingAddIngredientMenu = true
+                activeSheet = .addIngredientSource
             } label: {
                 Label("Add ingredient", systemImage: "plus")
             }
@@ -272,6 +345,14 @@ struct RecipeBuilderView: View {
         categoryRaw = r.categoryRaw
         servings = r.servings
 
+        if let data = r.photoData, let img = UIImage(data: data) {
+            photoData = data
+            uiImage = img
+        } else {
+            photoData = nil
+            uiImage = nil
+        }
+
         draftIngredients = r.ingredients.map { ing in
             DraftIngredient(
                 id: UUID(),
@@ -283,6 +364,22 @@ struct RecipeBuilderView: View {
                 fatPer100g: ing.fatPer100g,
                 fibrePer100g: ing.fibrePer100g
             )
+        }
+    }
+
+    // MARK: - Photo loading
+
+    private func loadImage(_ item: PhotosPickerItem?) {
+        guard let item else { return }
+
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                await MainActor.run {
+                    uiImage = image
+                    photoData = image.jpegData(compressionQuality: 0.85) ?? data
+                }
+            }
         }
     }
 
@@ -355,6 +452,7 @@ struct RecipeBuilderView: View {
             r.sourceFingerprint = fingerprint
             r.updatedAt = Date()
             r.ingredients = recipeIngredients
+            r.photoData = photoData
             try? ctx.save()
             dismiss()
             return
@@ -370,7 +468,7 @@ struct RecipeBuilderView: View {
             fatG: perServingFat,
             fibreG: perServingFibre,
             sourceFingerprint: fingerprint,
-            photoData: nil,
+            photoData: photoData,
             ingredients: recipeIngredients
         )
 
@@ -420,20 +518,171 @@ private struct TotalsRow: View {
     }
 }
 
-////////////////////////////////////////////////////////////////
-// MARK: - Manual food entry (creates a Food, saved to “My foods”)
-////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////
+/// MARK: - Add ingredient source picker
+//////////////////////////////////////////////////////////////////
+
+private struct AddIngredientSourceView: View {
+
+    let onScanBarcode: () -> Void
+    let onManual: () -> Void
+    let onBasics: () -> Void
+    let onMyFoods: () -> Void
+    let onAllFoods: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        List {
+            Section {
+                Text("Choose the fastest way to add an ingredient.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Add ingredient") {
+                Button { onScanBarcode() } label: {
+                    Label("Scan barcode", systemImage: "barcode.viewfinder")
+                }
+
+                Button { onManual() } label: {
+                    Label("Manual entry", systemImage: "square.and.pencil")
+                }
+
+                Button { onBasics() } label: {
+                    Label("Basics", systemImage: "list.bullet")
+                }
+
+                Button { onMyFoods() } label: {
+                    Label("My foods", systemImage: "person.crop.circle")
+                }
+
+                Button { onAllFoods() } label: {
+                    Label("Add ingredient (foods)", systemImage: "fork.knife")
+                }
+            }
+        }
+        .navigationTitle("Add ingredient")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") { onClose() }
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////
+/// MARK: - Food picker list (Basics / My foods / All)
+//////////////////////////////////////////////////////////////////
+
+private struct FoodPickerListView: View {
+
+    enum Mode {
+        case basics
+        case myFoods
+        case allFoods
+
+        var title: String {
+            switch self {
+            case .basics: return "Basics"
+            case .myFoods: return "My foods"
+            case .allFoods: return "Foods"
+            }
+        }
+    }
+
+    @Environment(\.modelContext) private var ctx
+    @Query(sort: \Food.createdAt, order: .forward) private var foodsByCreatedAt: [Food]
+    @Query(sort: \Food.name) private var foodsByName: [Food]
+
+    let mode: Mode
+    let onPick: (Food) -> Void
+    let onClose: () -> Void
+
+    @State private var queryText = ""
+
+    var body: some View {
+        List {
+            Section {
+                TextField("Search foods", text: $queryText)
+            }
+
+            if filtered.isEmpty {
+                Section {
+                    Text("No foods found.")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section(mode.title) {
+                    ForEach(filtered) { f in
+                        Button {
+                            onPick(f)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(f.name)
+                                    .font(.headline)
+
+                                Text("\(Int(f.kcalPer100g.rounded())) kcal per 100g")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .navigationTitle(mode.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") { onClose() }
+            }
+        }
+        .task {
+            FoodSeeder.seedIfNeeded(into: ctx)
+        }
+    }
+
+    private var baseList: [Food] {
+        switch mode {
+        case .allFoods:
+            return foodsByName
+
+        case .basics:
+            // Heuristic: earliest foods are likely the seeded basics
+            let earliest = Array(foodsByCreatedAt.prefix(50))
+            return earliest.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        case .myFoods:
+            // Heuristic: newest foods are likely user-created
+            let latest = Array(foodsByCreatedAt.suffix(50))
+            return latest.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+    }
+
+    private var filtered: [Food] {
+        let q = queryText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return baseList }
+        return baseList.filter { $0.name.lowercased().contains(q) }
+    }
+}
+
+//////////////////////////////////////////////////////////////////
+/// MARK: - Manual food entry (creates Food, then returns it)
+//////////////////////////////////////////////////////////////////
 
 private struct ManualFoodEntryView: View {
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var ctx
 
     let prefillBarcode: String?
     let onSaved: (Food) -> Void
+    let onClose: () -> Void
 
     @State private var name = ""
     @State private var barcode = ""
+
     @State private var kcalPer100g = ""
     @State private var carbsPer100g = ""
     @State private var proteinPer100g = ""
@@ -465,17 +714,13 @@ private struct ManualFoodEntryView: View {
 
             Section("Food") {
                 TextField("Name", text: $name)
-                if prefillBarcode != nil {
-                    TextField("Barcode (optional)", text: $barcode)
-                        .font(.footnote.monospaced())
-                } else {
-                    TextField("Barcode (optional)", text: $barcode)
-                        .font(.footnote.monospaced())
-                }
+
+                TextField("Barcode (optional)", text: $barcode)
+                    .font(.footnote.monospaced())
             }
 
             Section("Macros per 100g") {
-                numberField("kcal", text: $kcalPer100g)
+                numberField("kcal / 100g", text: $kcalPer100g)
                 numberField("Carbs (g)", text: $carbsPer100g)
                 numberField("Protein (g)", text: $proteinPer100g)
                 numberField("Fat (g)", text: $fatPer100g)
@@ -483,18 +728,20 @@ private struct ManualFoodEntryView: View {
             }
 
             Section("Default portion (optional)") {
-                TextField("Portion name (e.g. 1 pot)", text: $portionName)
-                numberField("Portion grams", text: $portionGrams)
+                TextField("Portion label (e.g. 1 egg)", text: $portionName)
+                numberField("Portion grams (e.g. 60)", text: $portionGrams)
             }
 
-            Button("Save food") { save() }
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Save food") {
+                save()
+            }
+            .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .navigationTitle("New food")
+        .navigationTitle("Manual food")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
+                Button("Close") { onClose() }
             }
         }
         .onAppear {
@@ -510,11 +757,11 @@ private struct ManualFoodEntryView: View {
     }
 
     private func save() {
-        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !n.isEmpty else { return }
+        let safeName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !safeName.isEmpty else { return }
 
         let food = Food(
-            name: n,
+            name: safeName,
             kcalPer100g: Double(kcalPer100g) ?? 0,
             carbsPer100g: Double(carbsPer100g) ?? 0,
             proteinPer100g: Double(proteinPer100g) ?? 0,
@@ -531,131 +778,197 @@ private struct ManualFoodEntryView: View {
     }
 }
 
-///////////////////////////////////////////////////////////////
-// MARK: - Barcode scanner (capture only) — UNIQUE NAMES
-///////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////
+/// MARK: - Barcode capture (camera)
+//////////////////////////////////////////////////////////////////
 
-private struct RecipeBarcodeScannerView: View {
-
-    @Environment(\.dismiss) private var dismiss
+private struct RecipeBarcodeCaptureView: View {
 
     let onFound: (String) -> Void
-    let onError: (String) -> Void
+    let onCancel: () -> Void
+
+    @State private var last = ""
+    @State private var errorText: String?
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                RecipeBarcodeScannerRepresentable(
-                    onFound: { code in
+        ZStack {
+            BarcodeScannerRepresentable(
+                onFound: { code in
+                    guard !code.isEmpty else { return }
+                    if code != last {
+                        last = code
                         onFound(code)
-                    },
-                    onError: { msg in
-                        onError(msg)
                     }
-                )
-                .ignoresSafeArea()
+                },
+                onError: { err in
+                    errorText = err.localizedDescription
+                }
+            )
+            .ignoresSafeArea()
 
-                VStack {
-                    Spacer()
+            VStack {
+                Spacer()
+
+                VStack(spacing: 10) {
                     Text("Scan a barcode")
                         .font(.headline)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 14)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .padding(.bottom, 24)
+
+                    if let errorText {
+                        Text(errorText)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text("Hold the barcode in the frame.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("Cancel") { onCancel() }
+                        .padding(.top, 4)
                 }
+                .padding(14)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(0.55))
+                )
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 22)
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
+        }
+        .navigationTitle("Scan barcode")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") { onCancel() }
             }
         }
     }
 }
 
-private struct RecipeBarcodeScannerRepresentable: UIViewControllerRepresentable {
+private struct BarcodeScannerRepresentable: UIViewControllerRepresentable {
 
     let onFound: (String) -> Void
-    let onError: (String) -> Void
+    let onError: (Error) -> Void
 
-    func makeUIViewController(context: Context) -> UIViewController {
-        let vc = UIViewController()
-        vc.view.backgroundColor = .black
-
-        let session = AVCaptureSession()
-
-        guard let device = AVCaptureDevice.default(for: .video) else {
-            onError("No camera available.")
-            return vc
-        }
-
-        do {
-            let input = try AVCaptureDeviceInput(device: device)
-            if session.canAddInput(input) { session.addInput(input) }
-        } catch {
-            onError("Camera input failed: \(error.localizedDescription)")
-            return vc
-        }
-
-        let output = AVCaptureMetadataOutput()
-        if session.canAddOutput(output) { session.addOutput(output) }
-
-        output.setMetadataObjectsDelegate(context.coordinator, queue: DispatchQueue.main)
-        output.metadataObjectTypes = [
-            .ean8, .ean13, .upce,
-            .code39, .code93, .code128,
-            .qr, .dataMatrix, .pdf417, .aztec
-        ]
-
-        let preview = AVCaptureVideoPreviewLayer(session: session)
-        preview.videoGravity = .resizeAspectFill
-        preview.frame = vc.view.bounds
-        vc.view.layer.addSublayer(preview)
-
-        context.coordinator.session = session
-        context.coordinator.previewLayer = preview
-
-        session.startRunning()
+    func makeUIViewController(context: Context) -> ScannerVC {
+        let vc = ScannerVC()
+        vc.onFound = onFound
+        vc.onError = onError
         return vc
     }
 
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        context.coordinator.previewLayer?.frame = uiViewController.view.bounds
-    }
+    func updateUIViewController(_ uiViewController: ScannerVC, context: Context) {}
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onFound: onFound, onError: onError)
-    }
+    final class ScannerVC: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
 
-    final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
-        let onFound: (String) -> Void
-        let onError: (String) -> Void
+        var onFound: ((String) -> Void)?
+        var onError: ((Error) -> Void)?
 
-        var session: AVCaptureSession?
-        var previewLayer: AVCaptureVideoPreviewLayer?
+        private let session = AVCaptureSession()
+        private var previewLayer: AVCaptureVideoPreviewLayer?
 
-        private var didEmit = false
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .black
+            configure()
+        }
 
-        init(onFound: @escaping (String) -> Void, onError: @escaping (String) -> Void) {
-            self.onFound = onFound
-            self.onError = onError
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            previewLayer?.frame = view.bounds
+        }
+
+        private func configure() {
+            do {
+                guard let device = AVCaptureDevice.default(for: .video) else {
+                    throw NSError(domain: "BarcodeScanner", code: 1, userInfo: [NSLocalizedDescriptionKey: "No camera available"])
+                }
+
+                let input = try AVCaptureDeviceInput(device: device)
+                if session.canAddInput(input) { session.addInput(input) }
+
+                let output = AVCaptureMetadataOutput()
+                if session.canAddOutput(output) { session.addOutput(output) }
+
+                output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+                output.metadataObjectTypes = [
+                    .ean8, .ean13, .upce,
+                    .code39, .code93, .code128,
+                    .qr, .pdf417, .dataMatrix, .aztec
+                ]
+
+                let preview = AVCaptureVideoPreviewLayer(session: session)
+                preview.videoGravity = .resizeAspectFill
+                view.layer.addSublayer(preview)
+                previewLayer = preview
+
+                session.startRunning()
+
+            } catch {
+                onError?(error)
+            }
         }
 
         func metadataOutput(_ output: AVCaptureMetadataOutput,
                             didOutput metadataObjects: [AVMetadataObject],
                             from connection: AVCaptureConnection) {
+            guard let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+                  let code = obj.stringValue else { return }
+            onFound?(code)
+        }
 
-            guard !didEmit else { return }
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            if session.isRunning { session.stopRunning() }
+        }
+    }
+}
 
-            if let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-               let code = obj.stringValue,
-               !code.isEmpty {
+//////////////////////////////////////////////////////////////////
+/// MARK: - Camera (real device)
+//////////////////////////////////////////////////////////////////
 
-                didEmit = true
-                session?.stopRunning()
-                onFound(code)
+private struct CameraPicker: UIViewControllerRepresentable {
+
+    var onImage: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImage: onImage, dismiss: dismiss)
+    }
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let onImage: (UIImage) -> Void
+        let dismiss: DismissAction
+
+        init(onImage: @escaping (UIImage) -> Void, dismiss: DismissAction) {
+            self.onImage = onImage
+            self.dismiss = dismiss
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController,
+                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let img = info[.originalImage] as? UIImage {
+                onImage(img)
             }
+            dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            dismiss()
         }
     }
 }
