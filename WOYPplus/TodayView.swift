@@ -113,7 +113,7 @@ struct TodayView: View {
                                     .foregroundStyle(.secondary)
                                     .offset(x: size * 0.28, y: -size * 0.28)
                             }
-                        }
+                                                      }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     }
                     .frame(height: 300)
@@ -249,6 +249,7 @@ struct TodayView: View {
         .task {
             ExtrasSeeder.seedIfNeeded(ctx: ctx)
             RecipeSeeder.seedIfNeeded(ctx: ctx)
+            FoodSeeder.seedIfNeeded(into: ctx)
         }
         
         // MARK: Sheets

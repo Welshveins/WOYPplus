@@ -4,6 +4,7 @@ import SwiftData
 struct FoodLibraryView: View {
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var ctx
 
     @Query(sort: \Food.name) private var foods: [Food]
 
@@ -53,6 +54,10 @@ struct FoodLibraryView: View {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Close") { dismiss() }
             }
+        }
+        .task {
+            // Ensures the library is populated even if you never opened TodayView first
+            FoodSeeder.seedIfNeeded(into: ctx)
         }
         .sheet(item: $selectedFood) { food in
             FoodPortionSheet(

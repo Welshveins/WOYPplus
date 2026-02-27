@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct QuickAddSheet: View {
 
@@ -9,6 +10,7 @@ struct QuickAddSheet: View {
 
     @State private var showingBarcode = false
     @State private var showingManual = false
+    @State private var showingFruit = false   // ✅ NEW
 
     var body: some View {
         VStack(spacing: 16) {
@@ -27,6 +29,7 @@ struct QuickAddSheet: View {
 
             // Buttons (as a single card group)
             VStack(spacing: 12) {
+
                 bigButton(
                     title: "Scan barcode",
                     systemImage: "barcode.viewfinder"
@@ -39,6 +42,14 @@ struct QuickAddSheet: View {
                     systemImage: "square.and.pencil"
                 ) {
                     showingManual = true
+                }
+
+                // ✅ NEW: Fruit quick add
+                bigButton(
+                    title: "Fruit",
+                    systemImage: "apple.logo"
+                ) {
+                    showingFruit = true
                 }
             }
             .padding(14)
@@ -73,6 +84,12 @@ struct QuickAddSheet: View {
         .sheet(isPresented: $showingManual) {
             NavigationStack {
                 QuickAddManualEntryView(day: day, mealSlot: mealSlot, useTimeBasedDefault: true)
+            }
+        }
+        // ✅ NEW
+        .sheet(isPresented: $showingFruit) {
+            NavigationStack {
+                FruitQuickAddView(day: day, mealSlot: mealSlot)
             }
         }
     }
