@@ -35,7 +35,22 @@ struct ExtrasSheet: View {
                 .init(label: "Chunky",   kcal: 207, carbs: 25, protein: 3.4, fat: 10.2, fibre: 1.5)
             ]
         ),
-
+        
+            .init(
+                name: "Mars",
+                variants: [
+                    .init(label: "Standard", kcal: 228, carbs: 35, protein: 2.2, fat: 8.5, fibre: 0),
+                    .init(label: "Duo", kcal: 348, carbs: 54, protein: 3.6, fat: 13.4, fibre: 0)
+                ]
+            ),
+        .init(
+            name: "Snickers",
+            variants: [
+                .init(label: "Standard", kcal: 248, carbs: 26, protein: 4.6, fat: 13, fibre: 0),
+                .init(label: "Duo", kcal: 404, carbs: 50, protein: 8, fat: 19.2, fibre: 0)
+            ]
+        ),
+        
         .init(
             name: "Crisps",
             variants: [
@@ -43,7 +58,13 @@ struct ExtrasSheet: View {
                 .init(label: "Grab bag",   kcal: 250, carbs: 24, protein: 3, fat: 16, fibre: 2)
             ]
         ),
-
+        
+            .init(
+                name: "Chocolate Hobnob",
+                variants: [
+                    .init(label: "2",  kcal: 186, carbs: 23, protein: 2.6, fat: 8.8, fibre: 2),
+                ]
+            ),
         .init(
             name: "Ice cream",
             variants: [
