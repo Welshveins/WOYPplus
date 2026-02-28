@@ -17,10 +17,17 @@ struct RangeBandView: View {
     private var low: Double { aim * (1.0 - margin) }
     private var high: Double { aim * (1.0 + margin) }
 
-    private var position01: Double {
+    private var rawPosition01: Double {
         let denom = max(high - low, 0.000_001)
-        let raw = (value - low) / denom
-        return min(max(raw, 0.0), 1.0)   // clamp at edges (no judgement)
+        return (value - low) / denom
+    }
+
+    private var position01: Double {
+        min(max(rawPosition01, 0.0), 1.0)   // clamp at edges (no judgement)
+    }
+
+    private var isOutOfRange: Bool {
+        value < low || value > high
     }
 
     private func format(_ x: Double) -> String {
@@ -47,20 +54,37 @@ struct RangeBandView: View {
 
             GeometryReader { geo in
                 let w = geo.size.width
-                let x = CGFloat(position01) * w
+                let h = geo.size.height
 
-                ZStack(alignment: .leading) {
+                // X positioning
+                let xRaw = CGFloat(position01) * w
+                let xClamped = max(0, min(xRaw - dotSize / 2, w - dotSize))
 
-                    // Soft band
+                // Keep the capsule sitting at the bottom of the available height
+                let capsuleY = max(0, h - bandHeight)
+
+                // Y positioning:
+                // - if out of range, dot sits on the bottom edge of the pill
+                // - otherwise dot sits centred on the pill
+                let centerOnPillY = capsuleY + (bandHeight - dotSize) / 2
+                let bottomOfPillY = capsuleY + (bandHeight - dotSize)
+
+                let y = isOutOfRange ? bottomOfPillY : centerOnPillY
+                let yClamped = max(0, min(y, h - dotSize))
+
+                ZStack(alignment: .topLeading) {
+
+                    // Soft band (opacity +0.2)
                     Capsule()
-                        .fill(Color.woypSlate.opacity(0.14))
+                        .fill(Color.woypSlate.opacity(0.50))
                         .frame(height: bandHeight)
+                        .offset(y: capsuleY)
 
                     // Dot
                     Circle()
                         .fill(Color.primary.opacity(0.85))
                         .frame(width: dotSize, height: dotSize)
-                        .offset(x: max(0, min(x - dotSize/2, w - dotSize)))
+                        .offset(x: xClamped, y: yClamped)
                 }
             }
             .frame(height: max(bandHeight, dotSize))
@@ -93,12 +117,30 @@ struct RangeBandView: View {
 }
 
 #Preview {
-    RangeBandView(
-        title: "Carbs",
-        unit: "g",
-        value: 220,
-        aim: 200,
-        mode: .normal
-    )
+    VStack(spacing: 16) {
+        RangeBandView(
+            title: "Carbs",
+            unit: "g",
+            value: 220,
+            aim: 200,
+            mode: .normal
+        )
+
+        RangeBandView(
+            title: "Carbs",
+            unit: "g",
+            value: 40,   // below range (dot should sit on bottom edge)
+            aim: 200,
+            mode: .normal
+        )
+
+        RangeBandView(
+            title: "Carbs",
+            unit: "g",
+            value: 500,  // above range (dot should sit on bottom edge)
+            aim: 200,
+            mode: .normal
+        )
+    }
     .padding()
 }
