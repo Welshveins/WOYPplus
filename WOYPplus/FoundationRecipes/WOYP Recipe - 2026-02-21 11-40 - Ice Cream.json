@@ -1,6 +1,5 @@
 {
-    "categoryRaw" : "Dinner",
-    "ingredients" : [
+  "ingredients" : [
     {
       "amountGrams" : 100,
       "carbsPer100g" : 28,

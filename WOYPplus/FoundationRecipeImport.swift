@@ -1,139 +1,144 @@
 import Foundation
 import SwiftData
 
-// MARK: - DTO matching Foundation export
-
-struct FoundationRecipeDTO: Codable {
-    var name: String
-    var categoryRaw: String
-    var ingredients: [FoundationIngredientDTO]
-    var photoJPEGBase64: String?
-}
-
-struct FoundationIngredientDTO: Codable {
-    var name: String
-    var amountGrams: Double
-
-    var kcalPer100g: Double
-    var carbsPer100g: Double
-    var proteinPer100g: Double
-    var fatPer100g: Double
-    var fibrePer100g: Double
-}
-
 enum FoundationRecipeImport {
 
-    // Imports a SINGLE recipe JSON blob (used for “shared file import” later)
-    @discardableResult
-    static func importRecipe(from data: Data, into ctx: ModelContext) throws -> Bool {
-        var existingFingerprints = try loadExistingFingerprints(ctx: ctx)
-        return try importRecipe(from: data, into: ctx, existingFingerprints: &existingFingerprints)
-    }
+    // MARK: - Public API
 
-    // Imports ALL bundled recipe JSON files.
-    // If your JSON files are not actually inside a real bundle subfolder,
-    // this will still find them because it falls back to scanning all .json in the bundle.
-    @discardableResult
-    static func importAllBundledRecipes(into ctx: ModelContext, folderName: String = "FoundationRecipes") throws -> Int {
+    /// Import every recipe json inside the app bundle.
+    /// Returns how many new recipes were inserted (not counting duplicates).
+    static func importAllBundledRecipes(into ctx: ModelContext, folderName: String) throws -> Int {
 
-        // 1) Try true bundle subfolder first
-        var urls = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: folderName) ?? []
+        // DEBUG (keep for now)
+        print("BOOT: seeding starting")
+        print("Bundle resourceURL:")
+        print(Bundle.main.resourceURL?.path ?? "nil")
 
-        // 2) Fallback: scan all bundled .json files (common when Xcode "groups" are used)
-        if urls.isEmpty {
-            urls = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? []
+        // Search the whole bundle for JSON (avoids folder-reference weirdness)
+        let allJson = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? []
+
+        // Filter to your recipe JSONs
+        let recipeFiles = allJson.filter { url in
+            let name = url.lastPathComponent.lowercased()
+            return name.hasSuffix(".woyprecipe.json") || name.hasPrefix("woyp recipe")
         }
 
-        if urls.isEmpty { return 0 }
+        print("Bundle json count: \(allJson.count)")
+        print("Recipe json count found: \(recipeFiles.count)")
 
-        var existingFingerprints = try loadExistingFingerprints(ctx: ctx)
+        guard !recipeFiles.isEmpty else {
+            throw ImportError.folderNotFound(folderName)
+        }
 
-        var importedCount = 0
-        for url in urls {
-            // Only import JSONs that decode as FoundationRecipeDTO
-            guard let data = try? Data(contentsOf: url) else { continue }
-            let didImport = (try? importRecipe(from: data, into: ctx, existingFingerprints: &existingFingerprints)) ?? false
-            if didImport { importedCount += 1 }
+        var inserted = 0
+
+        for url in recipeFiles {
+            do {
+                let data = try Data(contentsOf: url)
+                let didInsert = try importRecipe(from: data, into: ctx)
+                if didInsert { inserted += 1 }
+            } catch {
+                // Keep going if one file fails
+                print("Failed importing \(url.lastPathComponent): \(error)")
+            }
         }
 
         try? ctx.save()
-        return importedCount
+        print("BOOT: seeding finished. Inserted: \(inserted)")
+        return inserted
     }
 
-    // MARK: - Internal helpers
+    /// Imports a single recipe json blob.
+    /// Returns true if inserted, false if it already exists (dedupe).
+    static func importRecipe(from data: Data, into ctx: ModelContext) throws -> Bool {
 
-    private static func importRecipe(
-        from data: Data,
-        into ctx: ModelContext,
-        existingFingerprints: inout Set<String>
-    ) throws -> Bool {
+        let dto = try decodeDTO(from: data)
 
-        let decoder = JSONDecoder()
-        let dto = try decoder.decode(FoundationRecipeDTO.self, from: data)
+        let title = dto.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return false }
 
-        // Build ingredients
-        let ingredients = dto.ingredients.map {
+        // Build ingredients (full recipe amounts)
+        let recipeIngredients: [RecipeIngredient] = dto.ingredients.map { ing in
             RecipeIngredient(
-                name: $0.name,
-                amountGrams: $0.amountGrams,
-                kcalPer100g: $0.kcalPer100g,
-                carbsPer100g: $0.carbsPer100g,
-                proteinPer100g: $0.proteinPer100g,
-                fatPer100g: $0.fatPer100g,
-                fibrePer100g: $0.fibrePer100g
+                name: ing.name,
+                amountGrams: ing.amountGrams,
+                kcalPer100g: ing.kcalPer100g,
+                carbsPer100g: ing.carbsPer100g,
+                proteinPer100g: ing.proteinPer100g,
+                fatPer100g: ing.fatPer100g,
+                fibrePer100g: ing.fibrePer100g
             )
         }
 
-        // Compute WHOLE recipe totals
-        let totalKcal = ingredients.reduce(0) { $0 + $1.kcal }
-        let totalCarbs = ingredients.reduce(0) { $0 + $1.carbsG }
-        let totalProtein = ingredients.reduce(0) { $0 + $1.proteinG }
-        let totalFat = ingredients.reduce(0) { $0 + $1.fatG }
-        let totalFibre = ingredients.reduce(0) { $0 + $1.fibreG }
-
-        let photoData: Data?
-        if let b64 = dto.photoJPEGBase64 {
-            photoData = Data(base64Encoded: b64)
-        } else {
-            photoData = nil
-        }
-
-        // Stable fingerprint for de-duplication
+        // Determine fingerprint
+        let total = totals(from: recipeIngredients)
         let fingerprint = makeFingerprint(
-            name: dto.name,
-            totalKcal: totalKcal,
-            totalCarbs: totalCarbs,
-            totalProtein: totalProtein,
-            totalFat: totalFat
+            name: title,
+            totalKcal: total.kcal,
+            totalCarbs: total.carbs,
+            totalProtein: total.protein,
+            totalFat: total.fat
         )
 
-        // De-dupe quickly
-        if existingFingerprints.contains(fingerprint) {
+        // Dedupe: by fingerprint
+        let existing = (try? ctx.fetch(FetchDescriptor<Recipe>())) ?? []
+        if existing.contains(where: { ($0.sourceFingerprint ?? "") == fingerprint }) {
             return false
         }
-        existingFingerprints.insert(fingerprint)
+
+        // Create recipe (stored per-serving in app model)
+        let servings = max(dto.servings, 1)
+        let perServing = Totals(
+            kcal: total.kcal / servings,
+            carbs: total.carbs / servings,
+            protein: total.protein / servings,
+            fat: total.fat / servings,
+            fibre: total.fibre / servings
+        )
 
         let recipe = Recipe(
-            title: dto.name,
+            title: title,
             categoryRaw: dto.categoryRaw,
-            caloriesKcal: totalKcal,
-            carbsG: totalCarbs,
-            proteinG: totalProtein,
-            fatG: totalFat,
-            fibreG: totalFibre,
+            servings: servings,
+            caloriesKcal: perServing.kcal,
+            carbsG: perServing.carbs,
+            proteinG: perServing.protein,
+            fatG: perServing.fat,
+            fibreG: perServing.fibre,
             sourceFingerprint: fingerprint,
-            photoData: photoData,
-            ingredients: ingredients
+            photoData: dto.photoDataDecoded,   // ✅ now supports photoJPEGBase64
+            ingredients: recipeIngredients
         )
 
         ctx.insert(recipe)
-        try ctx.save()
+        try? ctx.save()
         return true
     }
 
-    private static func loadExistingFingerprints(ctx: ModelContext) throws -> Set<String> {
-        let existing = try ctx.fetch(FetchDescriptor<Recipe>())
-        return Set(existing.compactMap { $0.sourceFingerprint })
+    // MARK: - Decoding
+
+    private static func decodeDTO(from data: Data) throws -> FoundationRecipeDTO {
+        let decoder = JSONDecoder()
+        return try decoder.decode(FoundationRecipeDTO.self, from: data)
+    }
+
+    // MARK: - Totals + fingerprint
+
+    private struct Totals {
+        let kcal: Double
+        let carbs: Double
+        let protein: Double
+        let fat: Double
+        let fibre: Double
+    }
+
+    private static func totals(from ingredients: [RecipeIngredient]) -> Totals {
+        let kcal = ingredients.reduce(0) { $0 + ($1.kcalPer100g * $1.amountGrams / 100.0) }
+        let carbs = ingredients.reduce(0) { $0 + ($1.carbsPer100g * $1.amountGrams / 100.0) }
+        let protein = ingredients.reduce(0) { $0 + ($1.proteinPer100g * $1.amountGrams / 100.0) }
+        let fat = ingredients.reduce(0) { $0 + ($1.fatPer100g * $1.amountGrams / 100.0) }
+        let fibre = ingredients.reduce(0) { $0 + ($1.fibrePer100g * $1.amountGrams / 100.0) }
+        return Totals(kcal: kcal, carbs: carbs, protein: protein, fat: fat, fibre: fibre)
     }
 
     private static func makeFingerprint(
@@ -146,4 +151,86 @@ enum FoundationRecipeImport {
         let n = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         return "\(n)|\(Int(totalKcal.rounded()))|\(Int(totalCarbs.rounded()))|\(Int(totalProtein.rounded()))|\(Int(totalFat.rounded()))"
     }
+
+    // MARK: - Errors
+
+    enum ImportError: LocalizedError {
+        case folderNotFound(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .folderNotFound(let name):
+                return "Bundled folder not found: \(name)"
+            }
+        }
+    }
+}
+
+// MARK: - DTOs (uniquely named to avoid collisions)
+
+private struct FoundationRecipeDTO: Decodable {
+
+    // tolerate older exports that used "name" instead of "title"
+    let title: String
+    let categoryRaw: String
+    let servings: Double
+
+    // Photo support (your current files use photoJPEGBase64)
+    let photoJPEGBase64: String?
+    let photoDataBase64: String?
+
+    // Full recipe ingredient amounts
+    let ingredients: [FoundationIngredientDTO]
+
+    var photoDataDecoded: Data? {
+        // Prefer JPEG key (your uploaded example uses this)  [oai_citation:1‡WOYP Recipe - Banoffee Pie (1 portion).json](sediment://file_000000002a8071f486f4537fa9701dcd)
+        if let s = photoJPEGBase64, !s.isEmpty, let d = Data(base64Encoded: s) {
+            return d
+        }
+        // Support older key too
+        if let s = photoDataBase64, !s.isEmpty {
+            return Data(base64Encoded: s)
+        }
+        return nil
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case title
+        case name                 // legacy
+        case categoryRaw
+        case servings
+        case photoJPEGBase64      // ✅ current files
+        case photoDataBase64      // ✅ legacy files
+        case ingredients
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+
+        if let t = try? c.decode(String.self, forKey: .title) {
+            self.title = t
+        } else if let n = try? c.decode(String.self, forKey: .name) {
+            self.title = n
+        } else {
+            self.title = ""
+        }
+
+        self.categoryRaw = (try? c.decode(String.self, forKey: .categoryRaw)) ?? "Dinner"
+        self.servings = (try? c.decode(Double.self, forKey: .servings)) ?? 1
+
+        self.photoJPEGBase64 = try? c.decode(String.self, forKey: .photoJPEGBase64)
+        self.photoDataBase64 = try? c.decode(String.self, forKey: .photoDataBase64)
+
+        self.ingredients = (try? c.decode([FoundationIngredientDTO].self, forKey: .ingredients)) ?? []
+    }
+}
+
+private struct FoundationIngredientDTO: Decodable {
+    let name: String
+    let amountGrams: Double
+    let kcalPer100g: Double
+    let carbsPer100g: Double
+    let proteinPer100g: Double
+    let fatPer100g: Double
+    let fibrePer100g: Double
 }

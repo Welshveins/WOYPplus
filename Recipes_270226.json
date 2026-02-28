@@ -1,0 +1,879 @@
+{
+  "exportedAt" : "2026-02-27T22:14:45Z",
+  "recipes" : [
+    {
+      "caloriesKcal" : 176,
+      "carbsG" : 32,
+      "categoryRaw" : "Dinner",
+      "fatG" : 6.4,
+      "fibreG" : 1.6,
+      "proteinG" : 4.8,
+      "title" : "Bruschetta (1 Piece)"
+    },
+    {
+      "caloriesKcal" : 2410,
+      "carbsG" : 301.55,
+      "categoryRaw" : "Dinner",
+      "fatG" : 87.3,
+      "fibreG" : 23.75,
+      "proteinG" : 95.25,
+      "title" : "Bacon and Butternut Risotto"
+    },
+    {
+      "caloriesKcal" : 493.8,
+      "carbsG" : 16.85,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 32.1,
+      "fibreG" : 4,
+      "proteinG" : 29.8,
+      "title" : "Full English (Conservative Plate)"
+    },
+    {
+      "caloriesKcal" : 2185.8174999999997,
+      "carbsG" : 206.9565,
+      "categoryRaw" : "Dinner",
+      "fatG" : 92.69299999999998,
+      "fibreG" : 22.217,
+      "proteinG" : 126.7775,
+      "title" : "Salmon, rice and olive"
+    },
+    {
+      "caloriesKcal" : 120,
+      "carbsG" : 3.96,
+      "categoryRaw" : "Snack",
+      "fatG" : 9.52,
+      "fibreG" : 1.04,
+      "proteinG" : 4.1,
+      "title" : "Cashew nuts"
+    },
+    {
+      "caloriesKcal" : 568,
+      "carbsG" : 24,
+      "categoryRaw" : "Dinner",
+      "fatG" : 28.799999999999997,
+      "fibreG" : 6,
+      "proteinG" : 48.800000000000004,
+      "title" : "Beef in black bean sauce (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 772.7775,
+      "carbsG" : 40.0435,
+      "categoryRaw" : "Dinner",
+      "fatG" : 34.1245,
+      "fibreG" : 25.634500000000003,
+      "proteinG" : 75.71000000000001,
+      "title" : "Plant protein stir fry"
+    },
+    {
+      "caloriesKcal" : 365.158,
+      "carbsG" : 28.884,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 17.058,
+      "fibreG" : 2.5420000000000003,
+      "proteinG" : 28.622,
+      "title" : "Bacon and egg on toast"
+    },
+    {
+      "caloriesKcal" : 220.6,
+      "carbsG" : 31.5,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 5.35,
+      "fibreG" : 4,
+      "proteinG" : 10.600000000000001,
+      "title" : "Porridge (1 bowl)"
+    },
+    {
+      "caloriesKcal" : 420.4,
+      "carbsG" : 44.3,
+      "categoryRaw" : "Dinner",
+      "fatG" : 21.32,
+      "fibreG" : 2.2,
+      "proteinG" : 8.36,
+      "title" : "Trifle (1 portion)"
+    },
+    {
+      "caloriesKcal" : 406,
+      "carbsG" : 70,
+      "categoryRaw" : "Dinner",
+      "fatG" : 8.4,
+      "fibreG" : 3.5,
+      "proteinG" : 12.6,
+      "title" : "Plain naan (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 2315.3999999999996,
+      "carbsG" : 89.31,
+      "categoryRaw" : "Dinner",
+      "fatG" : 166.23000000000002,
+      "fibreG" : 14.345,
+      "proteinG" : 113.42999999999999,
+      "title" : "Fish pie"
+    },
+    {
+      "caloriesKcal" : 525,
+      "carbsG" : 63,
+      "categoryRaw" : "Dinner",
+      "fatG" : 21,
+      "fibreG" : 19.25,
+      "proteinG" : 24.5,
+      "title" : "Dal makhani (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 1763,
+      "carbsG" : 228.45,
+      "categoryRaw" : "Dinner",
+      "fatG" : 52.36,
+      "fibreG" : 18.54,
+      "proteinG" : 89.75,
+      "title" : "Fish taco"
+    },
+    {
+      "caloriesKcal" : 151.025,
+      "carbsG" : 10.2025,
+      "categoryRaw" : "Snack",
+      "fatG" : 3.9025,
+      "fibreG" : 0,
+      "proteinG" : 17.5,
+      "title" : "Protein mouse"
+    },
+    {
+      "caloriesKcal" : 677.3000000000001,
+      "carbsG" : 90.86999999999999,
+      "categoryRaw" : "Dinner",
+      "fatG" : 24.51,
+      "fibreG" : 1.28,
+      "proteinG" : 19.02,
+      "title" : "Egg fried rice (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 843.118,
+      "carbsG" : 41.922,
+      "categoryRaw" : "Dinner",
+      "fatG" : 21.807,
+      "fibreG" : 4.151,
+      "proteinG" : 114.71000000000001,
+      "title" : "Korean beef bowl"
+    },
+    {
+      "caloriesKcal" : 468,
+      "carbsG" : 54,
+      "categoryRaw" : "Dinner",
+      "fatG" : 23.4,
+      "fibreG" : 7.2,
+      "proteinG" : 9,
+      "title" : "Veg samosa x2 (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 352,
+      "carbsG" : 67.4,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 12,
+      "fibreG" : 1.8,
+      "proteinG" : 7.2,
+      "title" : "Pancakes (2 medium) with Syrup"
+    },
+    {
+      "caloriesKcal" : 1033,
+      "carbsG" : 92.5,
+      "categoryRaw" : "Dinner",
+      "fatG" : 43.95,
+      "fibreG" : 5.4,
+      "proteinG" : 54.8,
+      "title" : "Lamb rogan josh + rice (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 1019.5680000000001,
+      "carbsG" : 82.022,
+      "categoryRaw" : "Dinner",
+      "fatG" : 30.011000000000006,
+      "fibreG" : 13.614,
+      "proteinG" : 102.58699999999997,
+      "title" : "Sweet chilli beef"
+    },
+    {
+      "caloriesKcal" : 441.56999999999994,
+      "carbsG" : 54.785,
+      "categoryRaw" : "Dinner",
+      "fatG" : 22.83,
+      "fibreG" : 2.99,
+      "proteinG" : 3.685,
+      "title" : "Chocolate Brownies (1 portion)"
+    },
+    {
+      "caloriesKcal" : 181.6,
+      "carbsG" : 23.36,
+      "categoryRaw" : "Snacks",
+      "fatG" : 8.92,
+      "fibreG" : 0.48,
+      "proteinG" : 1.68,
+      "title" : "Caramel waffle"
+    },
+    {
+      "caloriesKcal" : 451.26,
+      "carbsG" : 37.748,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 20.94,
+      "fibreG" : 5.85,
+      "proteinG" : 23.291999999999998,
+      "title" : "Scrambled eggs on toast"
+    },
+    {
+      "caloriesKcal" : 377.6,
+      "carbsG" : 37.3,
+      "categoryRaw" : "Snacks",
+      "fatG" : 17.72,
+      "fibreG" : 7.300000000000001,
+      "proteinG" : 14.7,
+      "title" : "Peanut butter on toast"
+    },
+    {
+      "caloriesKcal" : 392.5,
+      "carbsG" : 44.800000000000004,
+      "categoryRaw" : "Lunch",
+      "fatG" : 13.2,
+      "fibreG" : 2.43,
+      "proteinG" : 15.1,
+      "title" : "Sandwich – Egg Mayo"
+    },
+    {
+      "caloriesKcal" : 400.8,
+      "carbsG" : 44.25,
+      "categoryRaw" : "Lunch",
+      "fatG" : 13.8,
+      "fibreG" : 2.43,
+      "proteinG" : 19.2,
+      "title" : "Sandwich – BLT"
+    },
+    {
+      "caloriesKcal" : 519,
+      "carbsG" : 104.4,
+      "categoryRaw" : "Dinner",
+      "fatG" : 2.1,
+      "fibreG" : 4.95,
+      "proteinG" : 18,
+      "title" : "Soba noodles"
+    },
+    {
+      "caloriesKcal" : 1565.015,
+      "carbsG" : 3.106,
+      "categoryRaw" : "Lunch",
+      "fatG" : 68.56700000000001,
+      "fibreG" : 1.11,
+      "proteinG" : 217.822,
+      "title" : "Beef stew"
+    },
+    {
+      "caloriesKcal" : 773,
+      "carbsG" : 80,
+      "categoryRaw" : "Dinner",
+      "fatG" : 21.439999999999998,
+      "fibreG" : 4.8,
+      "proteinG" : 58.599999999999994,
+      "title" : "Special chow mein (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 210,
+      "carbsG" : 27,
+      "categoryRaw" : "Dinner",
+      "fatG" : 9,
+      "fibreG" : 1.2,
+      "proteinG" : 4.8,
+      "title" : "Garlic Bread (1 Slice)"
+    },
+    {
+      "caloriesKcal" : 346.5,
+      "carbsG" : 44.1,
+      "categoryRaw" : "Lunch",
+      "fatG" : 8.7,
+      "fibreG" : 2.43,
+      "proteinG" : 17.1,
+      "title" : "Sandwich – Tuna Mayo"
+    },
+    {
+      "caloriesKcal" : 1148,
+      "carbsG" : 121.2,
+      "categoryRaw" : "Dinner",
+      "fatG" : 62.400000000000006,
+      "fibreG" : 11.4,
+      "proteinG" : 27.400000000000002,
+      "title" : "Battered sausage & chips (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 124.8,
+      "carbsG" : 0,
+      "categoryRaw" : "Dinner",
+      "fatG" : 7.8,
+      "fibreG" : 0,
+      "proteinG" : 12,
+      "title" : "Smoked Salmon (Starter Portion)"
+    },
+    {
+      "caloriesKcal" : 262.935,
+      "carbsG" : 26.400000000000002,
+      "categoryRaw" : "Dinner",
+      "fatG" : 8.017500000000002,
+      "fibreG" : 2.5575,
+      "proteinG" : 24.0375,
+      "title" : "Orso pasta"
+    },
+    {
+      "caloriesKcal" : 125,
+      "carbsG" : 15,
+      "categoryRaw" : "Dinner",
+      "fatG" : 5,
+      "fibreG" : 3.75,
+      "proteinG" : 3.75,
+      "title" : "Tomato Soup (Small Bowl)"
+    },
+    {
+      "caloriesKcal" : 700,
+      "carbsG" : 50,
+      "categoryRaw" : "Dinner",
+      "fatG" : 37.5,
+      "fibreG" : 5,
+      "proteinG" : 30,
+      "title" : "Pie – Steak & Ale"
+    },
+    {
+      "caloriesKcal" : 322.5,
+      "carbsG" : 45.5,
+      "categoryRaw" : "Lunch",
+      "fatG" : 6.9,
+      "fibreG" : 3.13,
+      "proteinG" : 18.6,
+      "title" : "Sandwich – Chicken Salad"
+    },
+    {
+      "caloriesKcal" : 351.6,
+      "carbsG" : 38.4,
+      "categoryRaw" : "Dinner",
+      "fatG" : 22.080000000000002,
+      "fibreG" : 2.4,
+      "proteinG" : 2.94,
+      "title" : "Eton Mess (1 portion)"
+    },
+    {
+      "caloriesKcal" : 384,
+      "carbsG" : 48,
+      "categoryRaw" : "Dinner",
+      "fatG" : 19.2,
+      "fibreG" : 6.4,
+      "proteinG" : 6.4,
+      "title" : "Onion bhaji x2 (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 600,
+      "carbsG" : 19.2,
+      "categoryRaw" : "Dinner",
+      "fatG" : 42,
+      "fibreG" : 6,
+      "proteinG" : 33.6,
+      "title" : "Saag paneer (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 65.1,
+      "carbsG" : 14.19,
+      "categoryRaw" : "Snacks",
+      "fatG" : 0.0999,
+      "fibreG" : 2.1,
+      "proteinG" : 0.8009999999999999,
+      "title" : "Apricots"
+    },
+    {
+      "caloriesKcal" : 23.205,
+      "carbsG" : 4.8294999999999995,
+      "categoryRaw" : "Snacks",
+      "fatG" : 0.1859,
+      "fibreG" : 0.1859,
+      "proteinG" : 0.5570499999999999,
+      "title" : "Rice cakes"
+    },
+    {
+      "caloriesKcal" : 90,
+      "carbsG" : 12,
+      "categoryRaw" : "Dinner",
+      "fatG" : 3,
+      "fibreG" : 0.75,
+      "proteinG" : 3,
+      "title" : "Gravy (chippy portion, takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 180,
+      "carbsG" : 28,
+      "categoryRaw" : "Snack",
+      "fatG" : 6.3,
+      "fibreG" : 0.5,
+      "proteinG" : 1.8,
+      "title" : "Ice Cream"
+    },
+    {
+      "caloriesKcal" : 825,
+      "carbsG" : 109.6,
+      "categoryRaw" : "Dinner",
+      "fatG" : 39,
+      "fibreG" : 12,
+      "proteinG" : 11.799999999999999,
+      "title" : "Salt & pepper chips (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 372.79999999999995,
+      "carbsG" : 55.21,
+      "categoryRaw" : "Dinner",
+      "fatG" : 14.82,
+      "fibreG" : 2.16,
+      "proteinG" : 11.370000000000001,
+      "title" : "Bread and Butter Pudding (1 portion)"
+    },
+    {
+      "caloriesKcal" : 590.344,
+      "carbsG" : 93.032,
+      "categoryRaw" : "Dinner",
+      "fatG" : 5.526,
+      "fibreG" : 33.16,
+      "proteinG" : 27.298,
+      "title" : "Beans on toast"
+    },
+    {
+      "caloriesKcal" : 144,
+      "carbsG" : 6,
+      "categoryRaw" : "Dinner",
+      "fatG" : 9.6,
+      "fibreG" : 0.6,
+      "proteinG" : 12,
+      "title" : "Prawn Cocktail (Small)"
+    },
+    {
+      "caloriesKcal" : 207.44,
+      "carbsG" : 23.424,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 8.615120000000001,
+      "fibreG" : 2.292,
+      "proteinG" : 7.92,
+      "title" : "Crumpet with peanut butter"
+    },
+    {
+      "caloriesKcal" : 1917,
+      "carbsG" : 236.7,
+      "categoryRaw" : "Dinner",
+      "fatG" : 66.6,
+      "fibreG" : 19.8,
+      "proteinG" : 83.7,
+      "title" : "Tortellini"
+    },
+    {
+      "caloriesKcal" : 773,
+      "carbsG" : 80,
+      "categoryRaw" : "Dinner",
+      "fatG" : 21.44,
+      "fibreG" : 4.8,
+      "proteinG" : 58.6,
+      "title" : "Chicken chow mein (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 1179.1535000000001,
+      "carbsG" : 80.03200000000001,
+      "categoryRaw" : "Dinner",
+      "fatG" : 40.0505,
+      "fibreG" : 27.431,
+      "proteinG" : 127.318,
+      "title" : "Pork in mustard sauce"
+    },
+    {
+      "caloriesKcal" : 1000,
+      "carbsG" : 132,
+      "categoryRaw" : "Dinner",
+      "fatG" : 48,
+      "fibreG" : 14,
+      "proteinG" : 14,
+      "title" : "Large chips (chippy, takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 650,
+      "carbsG" : 45,
+      "categoryRaw" : "Dinner",
+      "fatG" : 35,
+      "fibreG" : 5,
+      "proteinG" : 27.5,
+      "title" : "Pie – Chicken & Leek"
+    },
+    {
+      "caloriesKcal" : 490.2,
+      "carbsG" : 48.2,
+      "categoryRaw" : "Dinner",
+      "fatG" : 34.4,
+      "fibreG" : 2.0999999999999996,
+      "proteinG" : 6,
+      "title" : "Profiteroles (1 portion)"
+    },
+    {
+      "caloriesKcal" : 465.2,
+      "carbsG" : 79.14,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 9,
+      "fibreG" : 9.48,
+      "proteinG" : 20.46,
+      "title" : "Porridge (oats + milk) + banana"
+    },
+    {
+      "caloriesKcal" : 71.2,
+      "carbsG" : 18.24,
+      "categoryRaw" : "Snack",
+      "fatG" : 0.24,
+      "fibreG" : 2.08,
+      "proteinG" : 0.88,
+      "title" : "Banana"
+    },
+    {
+      "caloriesKcal" : 788,
+      "carbsG" : 94.4,
+      "categoryRaw" : "Dinner",
+      "fatG" : 31.7,
+      "fibreG" : 3.1,
+      "proteinG" : 32.6,
+      "title" : "Sweet & sour chicken (battered, takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 511.8,
+      "carbsG" : 74.8,
+      "categoryRaw" : "Dinner",
+      "fatG" : 21.84,
+      "fibreG" : 2.38,
+      "proteinG" : 8.08,
+      "title" : "Banoffee Pie (1 portion)"
+    },
+    {
+      "caloriesKcal" : 600,
+      "carbsG" : 36,
+      "categoryRaw" : "Dinner",
+      "fatG" : 33,
+      "fibreG" : 6,
+      "proteinG" : 33,
+      "title" : "Pie – Shepherd’s Pie"
+    },
+    {
+      "caloriesKcal" : 388.5,
+      "carbsG" : 44.7,
+      "categoryRaw" : "Lunch",
+      "fatG" : 14.7,
+      "fibreG" : 2.43,
+      "proteinG" : 18.9,
+      "title" : "Sandwich – Ham & Cheese"
+    },
+    {
+      "caloriesKcal" : 1353.6,
+      "carbsG" : 144,
+      "categoryRaw" : "Dinner",
+      "fatG" : 45.4,
+      "fibreG" : 11.120000000000001,
+      "proteinG" : 90.3,
+      "title" : "Spaghetti bolognese (home estimate)"
+    },
+    {
+      "caloriesKcal" : 224.4,
+      "carbsG" : 17.49,
+      "categoryRaw" : "Snack",
+      "fatG" : 0.99,
+      "fibreG" : 1.32,
+      "proteinG" : 34.98,
+      "title" : "Protein drink - chocolate"
+    },
+    {
+      "caloriesKcal" : 198,
+      "carbsG" : 39.6,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 2.2,
+      "fibreG" : 1.2,
+      "proteinG" : 7.5200000000000005,
+      "title" : "Cornflakes with Milk (1 bowl)"
+    },
+    {
+      "caloriesKcal" : 1146,
+      "carbsG" : 131.4,
+      "categoryRaw" : "Dinner",
+      "fatG" : 52.2,
+      "fibreG" : 12.3,
+      "proteinG" : 42.9,
+      "title" : "Cod & chips (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 352,
+      "carbsG" : 44.8,
+      "categoryRaw" : "Dinner",
+      "fatG" : 16,
+      "fibreG" : 4.8,
+      "proteinG" : 8,
+      "title" : "Spring rolls x2 (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 488,
+      "carbsG" : 78.4,
+      "categoryRaw" : "Dinner",
+      "fatG" : 12.8,
+      "fibreG" : 4,
+      "proteinG" : 14.4,
+      "title" : "Garlic naan (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 1311.4335,
+      "carbsG" : 68.5802,
+      "categoryRaw" : "Dinner",
+      "fatG" : 81.68589999999999,
+      "fibreG" : 18.5622,
+      "proteinG" : 71.157,
+      "title" : "Coconut, prawn and pineapple curry"
+    },
+    {
+      "caloriesKcal" : 248.4,
+      "carbsG" : 28.8,
+      "categoryRaw" : "Dinner",
+      "fatG" : 13.2,
+      "fibreG" : 0,
+      "proteinG" : 4.2,
+      "title" : "Ice Cream (2 scoops)"
+    },
+    {
+      "caloriesKcal" : 80.37,
+      "carbsG" : 14.06,
+      "categoryRaw" : "Snack",
+      "fatG" : 1.881,
+      "fibreG" : 0.43699999999999994,
+      "proteinG" : 1.235,
+      "title" : "Snack jacks mini"
+    },
+    {
+      "caloriesKcal" : 625,
+      "carbsG" : 82.5,
+      "categoryRaw" : "Lunch",
+      "fatG" : 30,
+      "fibreG" : 8.75,
+      "proteinG" : 8.75,
+      "title" : "Small chips (chippy, takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 98,
+      "carbsG" : 20.6,
+      "categoryRaw" : "Breakfast",
+      "fatG" : 0.4,
+      "fibreG" : 1,
+      "proteinG" : 1.2,
+      "title" : "Orange juice"
+    },
+    {
+      "caloriesKcal" : 419.45,
+      "carbsG" : 42.495000000000005,
+      "categoryRaw" : "Lunch",
+      "fatG" : 14.45,
+      "fibreG" : 6.25,
+      "proteinG" : 26.05,
+      "title" : "Ham & cheese sandwich"
+    },
+    {
+      "caloriesKcal" : 393.58,
+      "carbsG" : 6,
+      "categoryRaw" : "Lunch",
+      "fatG" : 18,
+      "fibreG" : 4,
+      "proteinG" : 50.5,
+      "title" : "Chicken salad bowl"
+    },
+    {
+      "caloriesKcal" : 583.35,
+      "carbsG" : 29.865000000000002,
+      "categoryRaw" : "Dinner",
+      "fatG" : 49.75,
+      "fibreG" : 0.35,
+      "proteinG" : 7.635,
+      "title" : "Cheesecake (1 portion)"
+    },
+    {
+      "caloriesKcal" : 165,
+      "carbsG" : 27,
+      "categoryRaw" : "Dinner",
+      "fatG" : 4.5,
+      "fibreG" : 1.5,
+      "proteinG" : 3,
+      "title" : "Curry sauce (chippy portion, takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 729,
+      "carbsG" : 81,
+      "categoryRaw" : "Lunch",
+      "fatG" : 32.4,
+      "fibreG" : 6.75,
+      "proteinG" : 29.7,
+      "title" : "3 slices pizza (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 615,
+      "carbsG" : 7.3,
+      "categoryRaw" : "Snack",
+      "fatG" : 51.2,
+      "fibreG" : 8.2,
+      "proteinG" : 27.1,
+      "title" : "Roasted peanuts"
+    },
+    {
+      "caloriesKcal" : 317,
+      "carbsG" : 9.9,
+      "categoryRaw" : "Dinner",
+      "fatG" : 26.2,
+      "fibreG" : 5.2,
+      "proteinG" : 7.8,
+      "title" : "Houmous"
+    },
+    {
+      "caloriesKcal" : 570,
+      "carbsG" : 36,
+      "categoryRaw" : "Dinner",
+      "fatG" : 30,
+      "fibreG" : 6,
+      "proteinG" : 30,
+      "title" : "Pie – Cottage Pie"
+    },
+    {
+      "caloriesKcal" : 486,
+      "carbsG" : 54,
+      "categoryRaw" : "Lunch",
+      "fatG" : 21.6,
+      "fibreG" : 4.5,
+      "proteinG" : 19.8,
+      "title" : "2 slices pizza (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 746.6,
+      "carbsG" : 90.24,
+      "categoryRaw" : "Dinner",
+      "fatG" : 20.28,
+      "fibreG" : 1.28,
+      "proteinG" : 44.88,
+      "title" : "Chicken fried rice (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 957.5,
+      "carbsG" : 96.9,
+      "categoryRaw" : "Dinner",
+      "fatG" : 28.87,
+      "fibreG" : 4.3,
+      "proteinG" : 67.5,
+      "title" : "Chicken tikka masala + rice (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 793.5,
+      "carbsG" : 132.04,
+      "categoryRaw" : "Dinner",
+      "fatG" : 18.16,
+      "fibreG" : 21.88,
+      "proteinG" : 26.28,
+      "title" : "Chana masala + rice (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 1608.48,
+      "carbsG" : 95.80000000000001,
+      "categoryRaw" : "Dinner",
+      "fatG" : 81.44999999999999,
+      "fibreG" : 25.51,
+      "proteinG" : 148.75,
+      "title" : "Chicken bechamel"
+    },
+    {
+      "caloriesKcal" : 957.86,
+      "carbsG" : 106.383,
+      "categoryRaw" : "Lunch",
+      "fatG" : 41.919,
+      "fibreG" : 6.02,
+      "proteinG" : 37.222,
+      "title" : "Yorkshire pudding"
+    },
+    {
+      "caloriesKcal" : 917,
+      "carbsG" : 119.6,
+      "categoryRaw" : "Dinner",
+      "fatG" : 34.07,
+      "fibreG" : 3.0500000000000003,
+      "proteinG" : 34.699999999999996,
+      "title" : "Crispy shredded beef (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 2128,
+      "carbsG" : 228,
+      "categoryRaw" : "Lunch",
+      "fatG" : 98.8,
+      "fibreG" : 19,
+      "proteinG" : 91.2,
+      "title" : "Pepperoni pizza (12\", takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 1800,
+      "carbsG" : 216,
+      "categoryRaw" : "Lunch",
+      "fatG" : 72,
+      "fibreG" : 18,
+      "proteinG" : 79.2,
+      "title" : "Margherita pizza (12\", takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 543.75,
+      "carbsG" : 100.52,
+      "categoryRaw" : "Dinner",
+      "fatG" : 17,
+      "fibreG" : 5.55,
+      "proteinG" : 4.13,
+      "title" : "Sticky Toffee Pudding (1 portion)"
+    },
+    {
+      "caloriesKcal" : 334.6,
+      "carbsG" : 55.015,
+      "categoryRaw" : "Dinner",
+      "fatG" : 12.700000000000001,
+      "fibreG" : 4.35,
+      "proteinG" : 3.085,
+      "title" : "Apple Crumble (1 portion)"
+    },
+    {
+      "caloriesKcal" : 120,
+      "carbsG" : 18,
+      "categoryRaw" : "Dinner",
+      "fatG" : 0.9,
+      "fibreG" : 7.5,
+      "proteinG" : 7.5,
+      "title" : "Mushy peas (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 159.9,
+      "carbsG" : 17.01,
+      "categoryRaw" : "Snack",
+      "fatG" : 9.09,
+      "fibreG" : 2.1,
+      "proteinG" : 2.1,
+      "title" : "Dairy milk"
+    },
+    {
+      "caloriesKcal" : 1023.5,
+      "carbsG" : 92.5,
+      "categoryRaw" : "Dinner",
+      "fatG" : 37.67,
+      "fibreG" : 3.2,
+      "proteinG" : 66.4,
+      "title" : "Chicken korma + rice (takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 1887,
+      "carbsG" : 236.8,
+      "categoryRaw" : "Lunch",
+      "fatG" : 74,
+      "fibreG" : 22.2,
+      "proteinG" : 77.7,
+      "title" : "Veg pizza (12\", takeaway estimate)"
+    },
+    {
+      "caloriesKcal" : 434.325,
+      "carbsG" : 27.1725,
+      "categoryRaw" : "Dinner",
+      "fatG" : 22.689999999999998,
+      "fibreG" : 6.24,
+      "proteinG" : 29.115,
+      "title" : "British freezer tapas"
+    }
+  ],
+  "schema" : "woypplus.backup.recipeLibrary.v1"
+}

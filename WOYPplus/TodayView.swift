@@ -246,11 +246,7 @@ struct TodayView: View {
             .padding(.bottom, 24)
         }
         .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
-        .task {
-            ExtrasSeeder.seedIfNeeded(ctx: ctx)
-            RecipeSeeder.seedIfNeeded(ctx: ctx)
-            FoodSeeder.seedIfNeeded(into: ctx)
-        }
+        
         
         // MARK: Sheets
         

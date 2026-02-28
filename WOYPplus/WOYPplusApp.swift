@@ -2,18 +2,22 @@ import SwiftUI
 import SwiftData
 
 @main
-struct WOYPplusApp: App {
+struct WOYPPlusApp: App {
 
-    var sharedModelContainer: ModelContainer = {
-        try! ModelContainer(
-            for:
-                Day.self,
-                Entry.self,
-                Recipe.self,
-                RecipeIngredient.self,
-                ExtrasPreset.self,
-                Food.self
-        )
+    // Single shared container for the whole app
+    private let sharedModelContainer: ModelContainer = {
+        do {
+            return try ModelContainer(
+                for: Day.self,
+                    Entry.self,
+                    Recipe.self,
+                    RecipeIngredient.self,
+                    ExtrasPreset.self,
+                    Food.self
+            )
+        } catch {
+            fatalError("Failed to create ModelContainer: \(error)")
+        }
     }()
 
     @State private var importAlertTitle = ""
@@ -23,11 +27,14 @@ struct WOYPplusApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // ✅ THIS is the critical line that fixes “no recipes”
+                .modelContainer(sharedModelContainer)
                 .task {
                     // Seed core libraries (additive seeding)
-                    FoodSeeder.seedIfNeeded(into: sharedModelContainer.mainContext)
-                    ExtrasSeeder.seedIfNeeded(ctx: sharedModelContainer.mainContext)
-                    RecipeSeeder.seedIfNeeded(ctx: sharedModelContainer.mainContext)
+                    let ctx = sharedModelContainer.mainContext
+                    FoodSeeder.seedIfNeeded(into: ctx)
+                    ExtrasSeeder.seedIfNeeded(ctx: ctx)
+                    RecipeSeeder.seedIfNeeded(ctx: ctx)
                 }
                 .onOpenURL { url in
                     handleIncomingRecipe(url)
@@ -38,46 +45,31 @@ struct WOYPplusApp: App {
                     Text(importAlertMessage)
                 }
         }
-        .modelContainer(sharedModelContainer)
     }
 
-    // MARK: - Receive handler
-
     private func handleIncomingRecipe(_ url: URL) {
+        // Uses the same importer as the bundled folder; tolerant DTO handles legacy "name"
+        Task { @MainActor in
+            let ctx = sharedModelContainer.mainContext
 
-        guard url.pathExtension.contains("json") else { return }
-
-        let ctx = sharedModelContainer.mainContext
-
-        do {
-            let didStart = url.startAccessingSecurityScopedResource()
-            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-
-            let data = try Data(contentsOf: url)
-
-            // Use your existing importer (dedupe handled there)
-            let didImport: Bool
             do {
-                didImport = try RecipeShareImport.importRecipe(from: data, into: ctx)
+                let data = try Data(contentsOf: url)
+                let didInsert = try FoundationRecipeImport.importRecipe(from: data, into: ctx)
+
+                if didInsert {
+                    importAlertTitle = "Imported"
+                    importAlertMessage = "Recipe added."
+                } else {
+                    importAlertTitle = "Already in library"
+                    importAlertMessage = "That recipe is already in your library."
+                }
+                showImportAlert = true
+
             } catch {
-                // Fallback: allow importing old Foundation recipe exports
-                didImport = try FoundationRecipeImport.importRecipe(from: data, into: ctx)
+                importAlertTitle = "Import failed"
+                importAlertMessage = error.localizedDescription
+                showImportAlert = true
             }
-
-            if didImport {
-                importAlertTitle = "Recipe added"
-                importAlertMessage = "The recipe was successfully imported."
-            } else {
-                importAlertTitle = "Already exists"
-                importAlertMessage = "This recipe is already in your library."
-            }
-
-            showImportAlert = true
-
-        } catch {
-            importAlertTitle = "Import failed"
-            importAlertMessage = error.localizedDescription
-            showImportAlert = true
         }
     }
 }
