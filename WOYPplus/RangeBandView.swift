@@ -2,32 +2,26 @@ import SwiftUI
 
 struct RangeBandView: View {
 
-    let title: String               // e.g. "kcal", "Carbs"
-    let unit: String                // e.g. "", "g"
-    let value: Double               // today’s value
-    let aim: Double                 // user aim
-    let mode: RangeMode             // normal / holiday / illness
+    let title: String
+    let unit: String
+    let value: Double
+    let aim: Double
+    let mode: RangeMode
 
-    // visual style (calm)
-    var bandHeight: CGFloat = 14
+    var bandHeight: CGFloat = 16
     var dotSize: CGFloat = 10
+
+    @Environment(\.colorScheme) private var colorScheme
 
     private var margin: Double { mode.marginFraction }
 
     private var low: Double { aim * (1.0 - margin) }
     private var high: Double { aim * (1.0 + margin) }
 
-    private var rawPosition01: Double {
-        let denom = max(high - low, 0.000_001)
-        return (value - low) / denom
-    }
-
     private var position01: Double {
-        min(max(rawPosition01, 0.0), 1.0)   // clamp at edges (no judgement)
-    }
-
-    private var isOutOfRange: Bool {
-        value < low || value > high
+        let denom = max(high - low, 0.000_001)
+        let raw = (value - low) / denom
+        return min(max(raw, 0.0), 1.0)
     }
 
     private func format(_ x: Double) -> String {
@@ -35,6 +29,25 @@ struct RangeBandView: View {
         f.numberStyle = .decimal
         f.maximumFractionDigits = 0
         return f.string(from: NSNumber(value: x)) ?? "\(Int(x))"
+    }
+
+    // MARK: - Refined day/night tuning
+
+    private var bandOpacity: Double {
+        // Darker in day, lighter in night
+        colorScheme == .light ? 0.65 : 0.60
+    }
+
+    private var cardFill: Color {
+        colorScheme == .light
+        ? Color.black.opacity(0.06)
+        : Color.woypSlate.opacity(0.07)
+    }
+
+    private var dotFill: Color {
+        colorScheme == .light
+        ? Color.primary.opacity(0.95)
+        : Color.primary.opacity(0.9)
     }
 
     var body: some View {
@@ -46,7 +59,6 @@ struct RangeBandView: View {
 
                 Spacer()
 
-                // subtle mode text (neutral)
                 Text(mode.rawValue)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -54,42 +66,22 @@ struct RangeBandView: View {
 
             GeometryReader { geo in
                 let w = geo.size.width
-                let h = geo.size.height
+                let x = CGFloat(position01) * w
 
-                // X positioning
-                let xRaw = CGFloat(position01) * w
-                let xClamped = max(0, min(xRaw - dotSize / 2, w - dotSize))
+                ZStack(alignment: .leading) {
 
-                // Keep the capsule sitting at the bottom of the available height
-                let capsuleY = max(0, h - bandHeight)
-
-                // Y positioning:
-                // - if out of range, dot sits on the bottom edge of the pill
-                // - otherwise dot sits centred on the pill
-                let centerOnPillY = capsuleY + (bandHeight - dotSize) / 2
-                let bottomOfPillY = capsuleY + (bandHeight - dotSize)
-
-                let y = isOutOfRange ? bottomOfPillY : centerOnPillY
-                let yClamped = max(0, min(y, h - dotSize))
-
-                ZStack(alignment: .topLeading) {
-
-                    // Soft band (opacity +0.2)
                     Capsule()
-                        .fill(Color.woypSlate.opacity(0.50))
+                        .fill(Color.woypSlate.opacity(colorScheme == .dark ? 0.60 : 0.65))
                         .frame(height: bandHeight)
-                        .offset(y: capsuleY)
 
-                    // Dot
                     Circle()
-                        .fill(Color.primary.opacity(0.85))
+                        .fill(dotFill)
                         .frame(width: dotSize, height: dotSize)
-                        .offset(x: xClamped, y: yClamped)
+                        .offset(x: max(0, min(x - dotSize/2, w - dotSize)))
                 }
             }
             .frame(height: max(bandHeight, dotSize))
 
-            // end labels (subtle, no judgement)
             HStack {
                 Text("\(format(low))\(unit)")
                     .font(.system(size: 13, weight: .medium))
@@ -111,36 +103,7 @@ struct RangeBandView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color.woypSlate.opacity(0.06))
+                .fill(cardFill)
         )
     }
-}
-
-#Preview {
-    VStack(spacing: 16) {
-        RangeBandView(
-            title: "Carbs",
-            unit: "g",
-            value: 220,
-            aim: 200,
-            mode: .normal
-        )
-
-        RangeBandView(
-            title: "Carbs",
-            unit: "g",
-            value: 40,   // below range (dot should sit on bottom edge)
-            aim: 200,
-            mode: .normal
-        )
-
-        RangeBandView(
-            title: "Carbs",
-            unit: "g",
-            value: 500,  // above range (dot should sit on bottom edge)
-            aim: 200,
-            mode: .normal
-        )
-    }
-    .padding()
 }

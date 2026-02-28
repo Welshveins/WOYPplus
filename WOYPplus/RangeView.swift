@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct RangeView: View {
-
-    // MARK: - Range Mode
+    @Environment(\.colorScheme) private var colorScheme    // MARK: - Range Mode
 
     enum RangeMode: String, CaseIterable {
         case normal = "Normal"
@@ -200,7 +199,7 @@ struct RangeView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(Color.woypSlate.opacity(0.10))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.10) : Color.woypSlate.opacity(0.15))
         )
     }
 
