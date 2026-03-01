@@ -328,8 +328,8 @@ private struct RangeBand: View {
                         .frame(width: 12, height: 12)
                         .position(
                             x: xPosition(index: idx, count: values.count, width: w),
-                            y: positionY(value: v, minV: minV, maxV: maxV, height: h)
-                        )
+                            y: max(6, min(positionY(value: v, minV: minV, maxV: maxV, height: h), h - 6))
+                            )
                 }
             }
         }
