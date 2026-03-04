@@ -75,7 +75,13 @@ struct RecipeBuilderView: View {
                     Button(existingRecipe == nil ? "Save" : "Update") {
                         saveRecipe()
                     }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draftIngredients.isEmpty)
+                    // ✅ CHANGE:
+                    // - New recipe: must have title + at least 1 ingredient
+                    // - Edit recipe: title is enough (allows updating photo only)
+                    .disabled(
+                        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || (existingRecipe == nil && draftIngredients.isEmpty)
+                    )
                 }
             }
             .onAppear { hydrateFromExistingIfNeeded() }
@@ -95,8 +101,6 @@ struct RecipeBuilderView: View {
                     }
 
                 case .scanBarcode:
-                    // ✅ FIX: this now does a real barcode lookup (OpenFoodFacts),
-                    // creates a Food with per-100g macros, and routes into portion selection.
                     NavigationStack {
                         RecipeBarcodeLookupView(
                             onPickedFood: { food in
@@ -109,7 +113,6 @@ struct RecipeBuilderView: View {
                 case .manualFood(let prefill):
                     NavigationStack {
                         ManualFoodEntryView(prefillBarcode: prefill) { newFood in
-                            // after saving a Food, go straight to portion selection
                             activeSheet = .portion(food: newFood)
                         } onClose: {
                             activeSheet = nil
@@ -651,12 +654,10 @@ private struct FoodPickerListView: View {
             return foodsByName
 
         case .basics:
-            // Heuristic: earliest foods are likely the seeded basics
             let earliest = Array(foodsByCreatedAt.prefix(60))
             return earliest.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         case .myFoods:
-            // Heuristic: newest foods are likely user-created
             let latest = Array(foodsByCreatedAt.suffix(80))
             return latest.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
