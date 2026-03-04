@@ -266,7 +266,21 @@ enum FoodSeeder {
                 defaultPortionName: "2 rashers", defaultPortionGrams: 60,
                 isUserCreated: false
             ),
-
+            
+            Food(
+                name: "Sausages",
+                kcalPer100g: 283, carbsPer100g: 1, proteinPer100g: 20, fatPer100g: 22, fibrePer100g: 0,
+                defaultPortionName: "2 Sausages", defaultPortionGrams: 110,
+                isUserCreated: false
+            ),
+            
+            Food(
+                name: "Baked Beans",
+                kcalPer100g: 90, carbsPer100g: 13.2, proteinPer100g: 4.6, fatPer100g: 0.4, fibrePer100g: 5.0,
+                defaultPortionName: "half tin", defaultPortionGrams: 200,
+                isUserCreated: false
+            ),
+            
             Food(
                 name: "Egg",
                 kcalPer100g: 143, carbsPer100g: 1.1, proteinPer100g: 13, fatPer100g: 10, fibrePer100g: 0,

@@ -19,9 +19,15 @@ struct AddPlateSheet: View {
 
     // Persisted settings
     @AppStorage("addPlate_cropToCentre") private var cropToCentre: Bool = true
-    @AppStorage("addPlate_plateMix") private var plateMixRaw: String = "" // empty = none selected
+
+    // Persisted nudges (B1)
+    @AppStorage("addPlate_plateMix") private var plateMixRaw: String = ""        // empty = none selected
+    @AppStorage("addPlate_vessel") private var vesselRaw: String = ""            // empty = none selected
+    @AppStorage("addPlate_addOns") private var addOnsRaw: String = ""            // comma-separated raw values
 
     @State private var plateMix: PlateMix? = nil
+    @State private var vessel: Vessel? = nil
+    @State private var addOns: Set<RichAddOn> = []
 
     // Photo
     @State private var showingCamera = false
@@ -58,10 +64,29 @@ struct AddPlateSheet: View {
             .toolbar { toolbarContent }
             .onAppear {
                 mealSlot = MealSlot.defaultSlot(for: when)
-                plateMix = PlateMix(rawValue: plateMixRaw) // nil if empty
+
+                plateMix = plateMixRaw.isEmpty ? nil : PlateMix(rawValue: plateMixRaw)
+                vessel = vesselRaw.isEmpty ? nil : Vessel(rawValue: vesselRaw)
+                addOns = decodeAddOns(addOnsRaw)
             }
             .onChange(of: plateMix) { _, newValue in
                 plateMixRaw = newValue?.rawValue ?? ""
+            }
+            .onChange(of: vessel) { _, newValue in
+                vesselRaw = newValue?.rawValue ?? ""
+                // Re-apply if we already have a vision label
+                if let id = lastVisionIdentifier {
+                    userLockedMacros = false
+                    applyHeuristic(for: id)
+                }
+            }
+            .onChange(of: addOns) { _, newValue in
+                addOnsRaw = encodeAddOns(newValue)
+                // Re-apply if we already have a vision label
+                if let id = lastVisionIdentifier {
+                    userLockedMacros = false
+                    applyHeuristic(for: id)
+                }
             }
             .onChange(of: when) { _, newValue in
                 guard !userManuallyPickedSlot else { return }
@@ -115,6 +140,10 @@ struct AddPlateSheet: View {
 
             plateMixGrid
 
+            vesselPicker
+
+            addOnsGrid
+
             if isAnalysing {
                 HStack {
                     ProgressView()
@@ -144,7 +173,6 @@ struct AddPlateSheet: View {
 
                 Button {
                     plateMix = mix
-                    // If we already have a vision label, re-apply using the newly chosen mix
                     if let id = lastVisionIdentifier {
                         userLockedMacros = false
                         applyHeuristic(for: id)
@@ -172,6 +200,75 @@ struct AddPlateSheet: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private var vesselPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Vessel")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Picker("Vessel", selection: Binding<Vessel?>(
+                get: { vessel },
+                set: { vessel = $0 }
+            )) {
+                Text("None").tag(Vessel?.none)
+                ForEach(Vessel.allCases) { v in
+                    Text(v.display).tag(Optional(v))
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.top, 4)
+    }
+
+    private var addOnsGrid: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Rich add-ons")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8)
+                ],
+                spacing: 8
+            ) {
+                ForEach(RichAddOn.allCases) { a in
+                    let isSelected = addOns.contains(a)
+
+                    Button {
+                        if isSelected {
+                            addOns.remove(a)
+                        } else {
+                            addOns.insert(a)
+                        }
+                    } label: {
+                        Text(a.display)
+                            .font(.system(size: 13, weight: .semibold))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(isSelected
+                                          ? Color.woypTeal.opacity(0.12)
+                                          : Color.woypSlate.opacity(0.07))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.top, 2)
     }
 
     private var detailsSection: some View {
@@ -285,8 +382,16 @@ struct AddPlateSheet: View {
                 return
             }
 
-            // Keep your simple selection strategy (you can expand later)
-            let best = results.first(where: { $0.confidence > 0.15 })
+            let keywords = [
+                "salad", "pizza", "burger", "pasta", "noodle", "spaghetti", "rice",
+                "curry", "stew", "chili", "chilli", "sandwich", "wrap",
+                "chocolate", "candy", "sweet"
+            ]
+
+            let best = results.first(where: { obs in
+                let id = obs.identifier.lowercased()
+                return keywords.contains(where: { id.contains($0) })
+            }) ?? results.first
 
             DispatchQueue.main.async {
                 isAnalysing = false
@@ -300,7 +405,7 @@ struct AddPlateSheet: View {
                 lastVisionIdentifier = best.identifier
 
                 guard !userLockedMacros else { return }
-                applyHeuristic(for: best.identifier)
+                applyHeuristic(for: results.map { $0.identifier }.joined(separator: " "))
             }
         }
 
@@ -336,8 +441,20 @@ struct AddPlateSheet: View {
             base = Macros(k: 550, c: 55, p: 25, f: 22, fi: 5)
         }
 
-        // Only apply plate mix if user has actually selected one
-        let adjusted = plateMix?.apply(to: base) ?? base
+        // Apply Plate Mix (if selected)
+        var adjusted = plateMix?.apply(to: base) ?? base
+
+        // Apply Vessel (if selected)
+        if let vessel {
+            adjusted = adjusted.scaled(by: vessel.multiplier)
+        }
+
+        // Apply Add-ons (if any selected)
+        if !addOns.isEmpty {
+            let mul = addOns.reduce(1.0) { $0 * $1.multiplier }
+            adjusted = adjusted.scaled(by: mul)
+        }
+
         fill(adjusted)
     }
 
@@ -402,6 +519,79 @@ struct AddPlateSheet: View {
         targetDay.hasEstimates = true
         try? ctx.save()
         dismiss()
+    }
+
+    // MARK: - Persistence helpers (Add-ons)
+
+    private func decodeAddOns(_ raw: String) -> Set<RichAddOn> {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let parts = trimmed.split(separator: ",").map { String($0) }
+        return Set(parts.compactMap { RichAddOn(rawValue: $0) })
+    }
+
+    private func encodeAddOns(_ set: Set<RichAddOn>) -> String {
+        set.map(\.rawValue).sorted().joined(separator: ",")
+    }
+}
+
+// MARK: - Vessel (B1 nudges)
+
+private enum Vessel: String, CaseIterable, Identifiable {
+    case smallPlate
+    case largePlate
+    case bowl
+
+    var id: String { rawValue }
+
+    var display: String {
+        switch self {
+        case .smallPlate: return "Small plate"
+        case .largePlate: return "Large plate"
+        case .bowl:       return "Bowl"
+        }
+    }
+
+    /// Deterministic multiplier on the baseline estimate.
+    var multiplier: Double {
+        switch self {
+        case .smallPlate: return 0.90
+        case .largePlate: return 1.15
+        case .bowl:       return 1.05
+        }
+    }
+}
+
+// MARK: - Rich add-ons (B1 nudges)
+
+private enum RichAddOn: String, CaseIterable, Identifiable {
+    case oil
+    case cream
+    case cheese
+    case sauceHeavy
+    case nuts
+
+    var id: String { rawValue }
+
+    var display: String {
+        switch self {
+        case .oil:        return "Oil"
+        case .cream:      return "Cream"
+        case .cheese:     return "Cheese"
+        case .sauceHeavy: return "Sauce-heavy"
+        case .nuts:       return "Nuts"
+        }
+    }
+
+    /// Deterministic multipliers (applied cumulatively).
+    var multiplier: Double {
+        switch self {
+        case .oil:        return 1.08
+        case .cream:      return 1.07
+        case .cheese:     return 1.06
+        case .sauceHeavy: return 1.10
+        case .nuts:       return 1.08
+        }
     }
 }
 
@@ -472,6 +662,16 @@ private struct Macros {
     var p: Double
     var f: Double
     var fi: Double
+
+    func scaled(by m: Double) -> Macros {
+        Macros(
+            k: k * m,
+            c: c * m,
+            p: p * m,
+            f: f * m,
+            fi: max(0, fi * m)
+        )
+    }
 }
 
 // MARK: - Camera (real device)

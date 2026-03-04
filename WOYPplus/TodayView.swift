@@ -121,7 +121,7 @@ struct TodayView: View {
                 .buttonStyle(.plain)
                 
                 // Explainer
-                Text("Outer ring = your most recent day.")
+                Text("Tap Ring to see your Daily / Weekly Macros ")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, -8)
