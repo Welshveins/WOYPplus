@@ -23,6 +23,36 @@ struct RecipeLibraryView: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
 
+    // MARK: Filtering (NEW)
+
+    private enum RecipeFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case breakfast = "Breakfast"
+        case lunch = "Lunch"
+        case dinner = "Dinner"
+        case snacks = "Snacks"
+
+        var id: String { rawValue }
+
+        var matchText: String? {
+            switch self {
+            case .all: return nil
+            case .breakfast: return "breakfast"
+            case .lunch: return "lunch"
+            case .dinner: return "dinner"
+            case .snacks: return "snacks"
+            }
+        }
+    }
+
+    @State private var filter: RecipeFilter = .all
+
+    private func matchesFilter(_ recipe: Recipe) -> Bool {
+        guard let match = filter.matchText else { return true }
+        let cat = recipe.categoryRaw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return cat == match || cat.contains(match)
+    }
+
     // MARK: Filtering
 
     private var filtered: [Recipe] {
@@ -30,6 +60,7 @@ struct RecipeLibraryView: View {
 
         return recipes
             .filter { q.isEmpty || $0.title.lowercased().contains(q) }
+            .filter { matchesFilter($0) }
             .sorted {
                 $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
             }
@@ -65,9 +96,16 @@ struct RecipeLibraryView: View {
                 .buttonStyle(.plain)
             }
 
-            // Search
+            // Search + filter
             Section {
                 TextField("Search recipes", text: $queryText)
+
+                Picker("Filter", selection: $filter) {
+                    ForEach(RecipeFilter.allCases) { f in
+                        Text(f.rawValue).tag(f)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
 
             // Recipes

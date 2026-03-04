@@ -390,8 +390,8 @@ struct AddPlateSheet: View {
 
             let best = results.first(where: { obs in
                 let id = obs.identifier.lowercased()
-                return keywords.contains(where: { id.contains($0) })
-            }) ?? results.first
+                return obs.confidence > 0.10 && keywords.contains(where: { id.contains($0) })
+            }) ?? results.first(where: { $0.confidence > 0.15 }) ?? results.first
 
             DispatchQueue.main.async {
                 isAnalysing = false
@@ -405,7 +405,7 @@ struct AddPlateSheet: View {
                 lastVisionIdentifier = best.identifier
 
                 guard !userLockedMacros else { return }
-                applyHeuristic(for: results.map { $0.identifier }.joined(separator: " "))
+                applyHeuristic(for: best.identifier)
             }
         }
 
