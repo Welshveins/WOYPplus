@@ -18,6 +18,11 @@ struct BrowseRecipeDetailView: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
 
+    // NEW: Add-to-meal flow
+    @State private var showingAddToMealPicker = false
+    @State private var showingServingsSheet = false
+    @State private var selectedMealSlot: MealSlot = MealSlot.defaultSlot(for: Date())
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
@@ -67,10 +72,34 @@ struct BrowseRecipeDetailView: View {
         .sheet(isPresented: $showingShareSheet) {
             ShareSheet(items: shareItems)
         }
+        // NEW: choose meal slot
+        .confirmationDialog(
+            "Add to meal",
+            isPresented: $showingAddToMealPicker,
+            titleVisibility: .visible
+        ) {
+            Button("Breakfast") { selectedMealSlot = .breakfast; showingServingsSheet = true }
+            Button("Lunch") { selectedMealSlot = .lunch; showingServingsSheet = true }
+            Button("Dinner") { selectedMealSlot = .dinner; showingServingsSheet = true }
+            Button("Snacks") { selectedMealSlot = .snacks; showingServingsSheet = true }
+            Button("Cancel", role: .cancel) { }
+        }
+        // NEW: log via existing servings sheet, using today’s Day
+        .sheet(isPresented: $showingServingsSheet) {
+            RecipeServingsSheet(
+                recipe: recipe,
+                day: ensureDay(for: Date()),
+                mealSlot: selectedMealSlot
+            )
+        }
         .alert(alertTitle, isPresented: $showAlert) {
             Button("OK", role: .cancel) { }
         } message: {
             Text(alertMessage)
+        }
+        .onAppear {
+            // default slot each time you open a recipe
+            selectedMealSlot = MealSlot.defaultSlot(for: Date())
         }
     }
 
@@ -155,6 +184,14 @@ struct BrowseRecipeDetailView: View {
     private var actionsCard: some View {
         VStack(spacing: 10) {
 
+            // NEW: Add to meal
+            Button {
+                showingAddToMealPicker = true
+            } label: {
+                actionRow(systemImage: "plus.circle.fill", title: "Add to meal")
+            }
+            .buttonStyle(.plain)
+
             Button {
                 shareRecipe()
             } label: {
@@ -220,8 +257,19 @@ struct BrowseRecipeDetailView: View {
             showAlert = true
         }
     }
+
+    // MARK: - Day helper (today)
+
+    private func ensureDay(for date: Date) -> Day {
+        let start = Day.startOfDay(for: date)
+        let all = (try? ctx.fetch(FetchDescriptor<Day>())) ?? []
+        if let existing = all.first(where: { Day.startOfDay(for: $0.date) == start }) {
+            return existing
+        }
+        let newDay = Day(date: start)
+        ctx.insert(newDay)
+        return newDay
+    }
 }
 
 // MARK: - UIKit share sheet
-
-

@@ -23,6 +23,12 @@ struct RecipesBrowseView: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
 
+    // NEW: quick “Add to meal” from Recipes
+    @State private var pendingLogRecipe: Recipe?
+    @State private var logRecipe: Recipe?
+    @State private var logMealSlot: MealSlot = MealSlot.defaultSlot(for: Date())
+    @State private var showingMealPicker = false
+
     private var filtered: [Recipe] {
         let q = queryText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
@@ -90,6 +96,17 @@ struct RecipesBrowseView: View {
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing) {
 
+                                // NEW: Add to meal (does not constrain “type” — just a quick picker)
+                                Button {
+                                    pendingLogRecipe = r
+                                    // default slot for now; user chooses next
+                                    logMealSlot = MealSlot.defaultSlot(for: Date())
+                                    showingMealPicker = true
+                                } label: {
+                                    Label("Add to meal", systemImage: "plus.circle")
+                                }
+                                .tint(.green)
+
                                 Button(role: .destructive) {
                                     delete(r)
                                 } label: {
@@ -125,6 +142,19 @@ struct RecipesBrowseView: View {
                 }
             }
 
+            // NEW: meal picker for “Add to meal”
+            .confirmationDialog(
+                "Add to meal",
+                isPresented: $showingMealPicker,
+                titleVisibility: .visible
+            ) {
+                Button("Breakfast") { startLog(.breakfast) }
+                Button("Lunch") { startLog(.lunch) }
+                Button("Dinner") { startLog(.dinner) }
+                Button("Snacks") { startLog(.snacks) }
+                Button("Cancel", role: .cancel) { pendingLogRecipe = nil }
+            }
+
             // Import (WOYPPlus share format first, then Foundation)
             .fileImporter(
                 isPresented: $showingImporter,
@@ -152,6 +182,15 @@ struct RecipesBrowseView: View {
                 .presentationDetents([.large])
             }
 
+            // NEW: Log recipe (from recipes browse)
+            .sheet(item: $logRecipe) { r in
+                RecipeServingsSheet(
+                    recipe: r,
+                    day: ensureDay(for: Date()),
+                    mealSlot: logMealSlot
+                )
+            }
+
             // Edit recipe
             .sheet(item: $editingRecipe) { r in
                 NavigationStack {
@@ -172,6 +211,27 @@ struct RecipesBrowseView: View {
                 Text(alertMessage)
             }
         }
+    }
+
+    // MARK: - Add to meal helpers
+
+    private func startLog(_ slot: MealSlot) {
+        logMealSlot = slot
+        logRecipe = pendingLogRecipe
+        pendingLogRecipe = nil
+    }
+
+    private func ensureDay(for date: Date) -> Day {
+        let start = Day.startOfDay(for: date)
+
+        let all = (try? ctx.fetch(FetchDescriptor<Day>())) ?? []
+        if let existing = all.first(where: { Day.startOfDay(for: $0.date) == start }) {
+            return existing
+        }
+
+        let newDay = Day(date: start)
+        ctx.insert(newDay)
+        return newDay
     }
 
     // MARK: - Import
