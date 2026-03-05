@@ -70,8 +70,11 @@ struct TrendView: View {
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 24)
+            .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.woypSlate.opacity(0.15), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Trend").font(.headline)
