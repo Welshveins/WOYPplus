@@ -135,9 +135,13 @@ struct HelpInstructionsView: View {
                 ) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("• Open a recipe.")
-                        Text("• Tap Share.")
+                        Text("• Tap Share recipe.")
                         Text("• Send via AirDrop, Messages or WhatsApp.")
-                        Text("• Recipient taps the file to import.")
+                        Text("• On some phones you may briefly see a WOYPPlus icon screen that doesn’t do anything — sorry.")
+                        Text("• Just close that screen (tap X / minimise it), then tap Share again and it will work normally.")
+                        Text("• The recipient will receive a .json recipe file.")
+                        Text("• iOS may show a preview when the file arrives (another Apple quirk). Just close the preview.")
+                        Text("• Then in WOYP Plus: Recipes → Import recipe (WOYP file) → choose the file from Files (it will be waiting there).")
                     }
                     .font(.subheadline)
                 }
