@@ -546,22 +546,27 @@ private struct AddIngredientSourceView: View {
                 Button { onScanBarcode() } label: {
                     Label("Scan barcode", systemImage: "barcode.viewfinder")
                 }
-
+                .buttonStyle(PressableCardStyle())
+                
                 Button { onManual() } label: {
                     Label("Manual entry", systemImage: "square.and.pencil")
                 }
+                .buttonStyle(PressableCardStyle())
 
                 Button { onBasics() } label: {
                     Label("Basics", systemImage: "list.bullet")
                 }
-
+                .buttonStyle(PressableCardStyle())
+                
                 Button { onMyFoods() } label: {
                     Label("My foods", systemImage: "person.crop.circle")
                 }
+                .buttonStyle(PressableCardStyle())
 
                 Button { onAllFoods() } label: {
                     Label("Add ingredient (foods)", systemImage: "fork.knife")
                 }
+                .buttonStyle(PressableCardStyle())
             }
         }
         .navigationTitle("Add ingredient")

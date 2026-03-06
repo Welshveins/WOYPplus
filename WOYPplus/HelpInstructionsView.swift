@@ -179,7 +179,7 @@ struct HelpInstructionsView: View {
                                 .fill(Color.woypSlate.opacity(0.08))
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableCardStyle())
                 }
 
                 Spacer(minLength: 24)
@@ -228,7 +228,7 @@ private struct HelpSection<Content: View>: View {
         VStack(spacing: 0) {
 
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(.easeInOut(duration: 0.22)) {
                     expanded = expanded == id ? nil : id
                 }
             } label: {
@@ -259,7 +259,7 @@ private struct HelpSection<Content: View>: View {
                         .fill(Color.woypSlate.opacity(0.08))
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableCardStyle())
 
             if expanded == id {
                 VStack(alignment: .leading, spacing: 12) {
@@ -313,7 +313,7 @@ private struct HelpCard: View {
                         .fill(Color.woypTerracotta.opacity(0.12))
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableCardStyle())
         }
     }
 }

@@ -48,14 +48,14 @@ struct RecipesBrowseView: View {
                     } label: {
                         actionRow(systemImage: "plus.circle.fill", title: "Add new recipe")
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableCardStyle())
 
                     Button {
                         showingImporter = true
                     } label: {
                         actionRow(systemImage: "square.and.arrow.down", title: "Import recipe file")
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableCardStyle())
                 }
 
                 // MARK: Search
@@ -305,11 +305,9 @@ struct RecipesBrowseView: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.woypSlate.opacity(0.08))
-        )
+        .padding(14)
+        .buttonStyle(PressableCardStyle())
+        
     }
 
     @ViewBuilder

@@ -118,7 +118,7 @@ struct TodayView: View {
                     }
                     .frame(height: 300)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableCardStyle())
                 
                 // Explainer
                 Text("Tap Ring to see your Daily / Weekly Macros ")
@@ -141,7 +141,7 @@ struct TodayView: View {
                     RangeView()
                 } label: {
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.woypSlate.opacity(0.58))
+                        .fill(Color.woypSlate.opacity(0.48))
                         .frame(height: 20)
                         .overlay(
                             Text("Range guide")
@@ -149,7 +149,7 @@ struct TodayView: View {
                                 .foregroundStyle(.secondary)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableCardStyle())
                 .padding(.top, 4)
                 
                 // Actions grid (2 × 2)
@@ -222,7 +222,7 @@ struct TodayView: View {
                                 .fill(Color.woypTeal.opacity(0.10))
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableCardStyle())
                     .padding(.top, 6)
                     
                     Button {
@@ -350,6 +350,13 @@ struct TodayView: View {
     
     private struct ActionTileRow: View {
         
+        private struct TodayTileButtonStyle: ButtonStyle {
+            func makeBody(configuration: Configuration) -> some View {
+                configuration.label
+                    .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+                    .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
+            }
+        }
         let title: String
         let systemImage: String
         let action: () -> Void
@@ -357,12 +364,12 @@ struct TodayView: View {
         var body: some View {
             Button(action: action) {
                 HStack(spacing: 12) {
-                    
+
                     Image(systemName: systemImage)
                         .font(.system(size: 20, weight: .semibold))
                         .frame(width: 30)
                         .foregroundStyle(.primary)
-                    
+
                     Text(title)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.primary)
@@ -370,7 +377,7 @@ struct TodayView: View {
                         .minimumScaleFactor(0.60)
                         .allowsTightening(true)
                         .layoutPriority(1)
-                    
+
                     Spacer(minLength: 0)
                 }
                 .padding(.vertical, 14)
@@ -386,7 +393,7 @@ struct TodayView: View {
                         )
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(TodayTileButtonStyle())
         }
     }
     
@@ -507,7 +514,7 @@ struct TodayView: View {
                         .fill(Color.woypSlate.opacity(0.06))
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableCardStyle())
         }
     }
 }
