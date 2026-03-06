@@ -39,6 +39,9 @@ struct AddPlateSheet: View {
     @State private var analysisLabel: String?
     @State private var lastVisionIdentifier: String?
 
+    // NEW: one-tap “about right” adjustment
+    @State private var richnessAdjustment: Double = 1.0
+
     // Macros
     @State private var kcal: String = ""
     @State private var carbs: String = ""
@@ -68,13 +71,13 @@ struct AddPlateSheet: View {
                 plateMix = plateMixRaw.isEmpty ? nil : PlateMix(rawValue: plateMixRaw)
                 vessel = vesselRaw.isEmpty ? nil : Vessel(rawValue: vesselRaw)
                 addOns = decodeAddOns(addOnsRaw)
+                richnessAdjustment = 1.0
             }
             .onChange(of: plateMix) { _, newValue in
                 plateMixRaw = newValue?.rawValue ?? ""
             }
             .onChange(of: vessel) { _, newValue in
                 vesselRaw = newValue?.rawValue ?? ""
-                // Re-apply if we already have a vision label
                 if let id = lastVisionIdentifier {
                     userLockedMacros = false
                     applyHeuristic(for: id)
@@ -82,7 +85,6 @@ struct AddPlateSheet: View {
             }
             .onChange(of: addOns) { _, newValue in
                 addOnsRaw = encodeAddOns(newValue)
-                // Re-apply if we already have a vision label
                 if let id = lastVisionIdentifier {
                     userLockedMacros = false
                     applyHeuristic(for: id)
@@ -321,6 +323,10 @@ struct AddPlateSheet: View {
             numberField("Fat (g)", text: $fat)
             numberField("Fibre (g)", text: $fibre)
 
+            if lastVisionIdentifier != nil {
+                richnessAdjustmentRow
+            }
+
             if let id = lastVisionIdentifier {
                 Button {
                     userLockedMacros = false
@@ -330,6 +336,52 @@ struct AddPlateSheet: View {
                 }
             }
         }
+    }
+
+    private var richnessAdjustmentRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Looks")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                richnessButton(title: "Lighter", value: 0.90)
+                richnessButton(title: "About right", value: 1.0)
+                richnessButton(title: "Richer", value: 1.10)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func richnessButton(title: String, value: Double) -> some View {
+        let isSelected = abs(richnessAdjustment - value) < 0.001
+
+        return Button {
+            guard let id = lastVisionIdentifier else { return }
+            userLockedMacros = false
+            richnessAdjustment = value
+            applyHeuristic(for: id)
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isSelected
+                              ? Color.woypTeal.opacity(0.12)
+                              : Color.woypSlate.opacity(0.07))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var infoSection: some View {
@@ -374,6 +426,7 @@ struct AddPlateSheet: View {
             isAnalysing = true
             analysisLabel = nil
             lastVisionIdentifier = nil
+            richnessAdjustment = 1.0
         }
 
         let request = VNClassifyImageRequest { request, _ in
@@ -403,6 +456,7 @@ struct AddPlateSheet: View {
 
                 analysisLabel = "\(best.identifier) (\(Int(best.confidence * 100))%)"
                 lastVisionIdentifier = best.identifier
+                richnessAdjustment = 1.0
 
                 guard !userLockedMacros else { return }
                 applyHeuristic(for: best.identifier)
@@ -454,6 +508,9 @@ struct AddPlateSheet: View {
             let mul = addOns.reduce(1.0) { $0 * $1.multiplier }
             adjusted = adjusted.scaled(by: mul)
         }
+
+        // NEW: apply lighter / about right / richer
+        adjusted = adjusted.scaled(by: richnessAdjustment)
 
         fill(adjusted)
     }
