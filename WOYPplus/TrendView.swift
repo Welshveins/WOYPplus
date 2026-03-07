@@ -11,7 +11,7 @@ struct TrendView: View {
     @Query(sort: \Entry.createdAt, order: .reverse) private var entries: [Entry]
 
     @State private var mode: Mode = .daily
-    @State private var showAsPercent = true   // true = % of calories, false = grams
+    @State private var showAsPercent = true
 
     var body: some View {
 
@@ -30,19 +30,21 @@ struct TrendView: View {
                 }
                 .padding(.top, 6)
 
-                // ✅ Daily LEFT, Weekly RIGHT (as you prefer)
                 Picker("", selection: $mode) {
                     Text(Mode.daily.rawValue).tag(Mode.daily)
                     Text(Mode.weekly.rawValue).tag(Mode.weekly)
                 }
                 .pickerStyle(.segmented)
                 .padding(.top, 4)
+                .onChange(of: mode) { _, _ in
+                    NotificationCenter.default.post(name: .trendRingsRestart, object: nil)
+                }
 
-                // Toggle pill (works in dark mode)
                 HStack {
                     Spacer()
                     Button {
                         showAsPercent.toggle()
+                        NotificationCenter.default.post(name: .trendRingsRestart, object: nil)
                     } label: {
                         Text(showAsPercent ? "Show as g" : "Show as %")
                             .font(.subheadline.weight(.semibold))
@@ -70,14 +72,15 @@ struct TrendView: View {
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 24)
-            .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
         }
+        .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.woypSlate.opacity(0.15), for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Trend").font(.headline)
+                Text("Trend")
+                    .font(.headline)
             }
         }
     }
@@ -97,7 +100,6 @@ struct TrendView: View {
                 .frame(width: ringSize, height: ringSize)
                 .padding(.top, 1)
 
-                // Foundation-style compact legend row (keeps everything visible)
                 HStack(spacing: 18) {
                     legendDot(color: .woypTeal, text: "P")
                     legendDot(color: .woypSand, text: "C")
@@ -132,14 +134,14 @@ private struct ConcentricTrendRings: View {
     let showAsPercent: Bool
     let entries: [Entry]
 
-    // Match Foundation “many rings” feel
     private let ringsCountDaily = 14
     private let ringsCountWeekly = 12
 
-    // ✅ No rounded ends + bigger gaps between concentric rings
     private let lineWidth: CGFloat = 10
-    private let gapBetweenRings: CGFloat = 8   // bigger gap between rings
-    private let segmentGap: Double = 0.002     // consistent gaps between macros
+    private let gapBetweenRings: CGFloat = 8
+    private let segmentGap: Double = 0.0
+
+    @State private var animateRings = false
 
     var body: some View {
         GeometryReader { geo in
@@ -155,7 +157,6 @@ private struct ConcentricTrendRings: View {
                 ForEach(series.indices, id: \.self) { idx in
                     let t = series[idx]
 
-                    // Outer rings = more recent
                     let inset = CGFloat(idx) * (lineWidth + gapBetweenRings)
                     let size = max(44, baseSize - inset)
 
@@ -171,23 +172,34 @@ private struct ConcentricTrendRings: View {
                         lineWidth: lineWidth,
                         segmentGap: segmentGap,
                         backgroundOpacity: 0.12,
-                        lineCap: .butt   // ✅ square ends (no rounded edges)
+                        lineCap: .butt
                     )
                     .frame(width: size, height: size)
+                    .opacity(animateRings ? 1 : 0)
                 }
 
-                // Clear label so you always know what you're looking at
                 Text(showAsPercent ? "Macros by % of calories" : "Macros by grams")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
         }
+        .onAppear {
+            animateRings = false
+            withAnimation(.easeInOut(duration: 1.6)) {
+                animateRings = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .trendRingsRestart)) { _ in
+            animateRings = false
+            DispatchQueue.main.async {
+                withAnimation(.easeInOut(duration: 1.6)) {
+                    animateRings = true
+                }
+            }
+        }
     }
 
-    // MARK: - Series builders
-
     private func daySeries(limit: Int) -> [(carbs: Double, protein: Double, fat: Double)] {
-        // Group entries by day-start
         let groups = Dictionary(grouping: entries) { e in
             Day.startOfDay(for: e.day?.date ?? e.createdAt)
         }
@@ -222,18 +234,20 @@ private struct ConcentricTrendRings: View {
         }
     }
 
-    // MARK: - Fractions
+    private func fractionsByCalories(carbsG: Double, proteinG: Double, fatG: Double) -> (Double, Double, Double) {
+        let calsC = carbsG * 4
+        let calsP = proteinG * 4
+        let calsF = fatG * 9
+        let total = max(calsC + calsP + calsF, 0.0001)
+        return (calsC / total, calsP / total, calsF / total)
+    }
 
     private func fractionsByGrams(carbsG: Double, proteinG: Double, fatG: Double) -> (Double, Double, Double) {
-        let total = max(carbsG + proteinG + fatG, 1)
+        let total = max(carbsG + proteinG + fatG, 0.0001)
         return (carbsG / total, proteinG / total, fatG / total)
     }
+}
 
-    private func fractionsByCalories(carbsG: Double, proteinG: Double, fatG: Double) -> (Double, Double, Double) {
-        let cKcal = carbsG * 4.0
-        let pKcal = proteinG * 4.0
-        let fKcal = fatG * 9.0
-        let total = max(cKcal + pKcal + fKcal, 1)
-        return (cKcal / total, pKcal / total, fKcal / total)
-    }
+private extension Notification.Name {
+    static let trendRingsRestart = Notification.Name("trendRingsRestart")
 }

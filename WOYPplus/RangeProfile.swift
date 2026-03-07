@@ -11,9 +11,9 @@ enum RangeMode: String, CaseIterable, Codable {
     /// Normal ±10%, Holiday/Illness ±20%
     var marginFraction: Double {
         switch self {
-        case .normal:  return 0.20
-        case .holiday: return 0.30
-        case .illness: return 0.30
+        case .normal:  return 0.25
+        case .holiday: return 0.35
+        case .illness: return 0.35
         }
     }
 }

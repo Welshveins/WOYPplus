@@ -42,7 +42,7 @@ struct QuickAddManualEntryView: View {
                     .keyboardType(.decimalPad)
             }
 
-            Button("Log") {
+            Button("Add") {
                 log()
             }
         }

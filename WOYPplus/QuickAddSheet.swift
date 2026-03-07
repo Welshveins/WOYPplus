@@ -79,7 +79,9 @@ struct QuickAddSheet: View {
             }
         }
         .sheet(isPresented: $showingBarcode) {
-            BarcodeQuickAddView(day: day, mealSlot: mealSlot)
+            NavigationStack {
+                BarcodeQuickAddView(day: day, mealSlot: mealSlot)
+            }
         }
         .sheet(isPresented: $showingManual) {
             NavigationStack {

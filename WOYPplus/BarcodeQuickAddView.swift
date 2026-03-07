@@ -144,7 +144,7 @@ private struct BarcodeAmountAndLogView: View {
                 Button("Cancel") { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Log") { log() }
+                Button("Add") { log() }
                     .disabled(!(n?.hasUsableCore ?? false))
             }
         }
