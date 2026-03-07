@@ -176,7 +176,7 @@ private struct ConcentricTrendRings: View {
                     )
                     .frame(width: size, height: size)
                     .opacity(animateRings ? 1 : 0)
-                }
+                    .opacity(idx == 0 ? 1.0 : 0.83)                }
 
                 Text(showAsPercent ? "Macros by % of calories" : "Macros by grams")
                     .font(.subheadline.weight(.medium))

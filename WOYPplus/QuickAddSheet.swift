@@ -106,11 +106,12 @@ struct QuickAddSheet: View {
             HStack(spacing: 14) {
 
                 Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(width: 30)
+                    .font(.system(size: 19, weight: .semibold))
+                    .frame(width: 28)
 
                 Text(title)
                     .font(.system(size: 16, weight: .semibold))
+                    .tracking(-0.1)
 
                 Spacer()
             }
@@ -118,6 +119,10 @@ struct QuickAddSheet: View {
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.woypSlate.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
             )
         }
         .buttonStyle(.plain)

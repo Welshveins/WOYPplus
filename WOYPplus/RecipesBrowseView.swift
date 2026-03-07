@@ -68,9 +68,17 @@ struct RecipesBrowseView: View {
                 // MARK: Recipes list
                 Section("Recipes") {
                     if filtered.isEmpty {
-                        Text("No recipes.")
-                            .foregroundStyle(.secondary)
-                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("No recipes yet.")
+                                .font(.subheadline.weight(.semibold))
+
+                            Text("Add one to start building your library.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    else {
                         ForEach(filtered) { r in
                             Button {
                                 selectedRecipe = r
@@ -79,12 +87,12 @@ struct RecipesBrowseView: View {
 
                                     thumbnail(for: r)
 
-                                    VStack(alignment: .leading, spacing: 6) {
+                                    VStack(alignment: .leading, spacing: 4) {
                                         Text(r.title)
-                                            .font(.headline)
+                                            .font(.system(size: 17, weight: .semibold))
 
                                         Text("\(Int(r.caloriesKcal.rounded())) kcal • C \(Int(r.carbsG.rounded()))g • P \(Int(r.proteinG.rounded()))g • F \(Int(r.fatG.rounded()))g")
-                                            .font(.subheadline)
+                                            .font(.system(size: 13, weight: .medium))
                                             .foregroundStyle(.secondary)
                                             .lineLimit(1)
                                     }

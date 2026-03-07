@@ -73,6 +73,8 @@ struct QuickAddManualEntryView: View {
         ctx.insert(entry)
         try? ctx.save()
 
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
         dismiss()
     }
 }

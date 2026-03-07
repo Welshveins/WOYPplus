@@ -119,9 +119,11 @@ struct AddPlateSheet: View {
             if let image = uiImage {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFit()
+                    .scaledToFill()
                     .frame(maxHeight: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
             }
 
             HStack(spacing: 12) {
@@ -575,6 +577,9 @@ struct AddPlateSheet: View {
 
         targetDay.hasEstimates = true
         try? ctx.save()
+
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
         dismiss()
     }
 

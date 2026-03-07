@@ -27,6 +27,8 @@ struct TodayView: View {
     @State private var showingHelp = false
     @State private var showingRecipesBrowse = false
     
+    @State private var logPulse = false
+    
     private var todayStart: Date { Day.startOfDay(for: Date()) }
     
     private var todayString: String {
@@ -106,6 +108,8 @@ struct TodayView: View {
                                 fat: t.fat
                             )
                             .frame(width: size, height: size)
+                            .scaleEffect(logPulse ? 1.08 : 1.0)
+                            .animation(.easeOut(duration: 0.35), value: logPulse)
                             
                             if day.hasEstimates {
                                 Text("*")
@@ -117,7 +121,12 @@ struct TodayView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     }
                     .frame(height: 300)
-                }
+                    .onAppear {
+                        logPulse = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            logPulse = false
+                        }
+                    }                }
                 .buttonStyle(PressableCardStyle())
                 
                 // Explainer
@@ -343,7 +352,7 @@ struct TodayView: View {
                 ActionTileRow(title: "Your plate", systemImage: "camera", action: onYourPlate)
                 ActionTileRow(title: "Recipe", systemImage: "fork.knife", action: onRecipe)
                 ActionTileRow(title: "Quick add", systemImage: "barcode.viewfinder", action: onQuickAdd)
-                ActionTileRow(title: "Extras", systemImage: "cube", action: onExtras)
+                ActionTileRow(title: "Extras", systemImage: "square.stack.3d.up.fill", action: onExtras)
             }
         }
     }
@@ -365,9 +374,20 @@ struct TodayView: View {
             Button(action: action) {
                 HStack(spacing: 12) {
 
-                    Image(systemName: systemImage)
-                        .font(.system(size: 20, weight: .semibold))
-                        .frame(width: 30)
+                    ZStack {
+                        Circle()
+                            .fill(Color.woypSlate.opacity(0.12))
+                            .frame(width: 34, height: 34)
+
+                        ZStack {
+                            Circle()
+                                .fill(Color.woypSlate.opacity(0.12))
+                                .frame(width: 34, height: 34)
+
+                            Image(systemName: systemImage)
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                    }
                         .foregroundStyle(.primary)
 
                     Text(title)
