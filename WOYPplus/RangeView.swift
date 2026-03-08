@@ -2,7 +2,9 @@ import SwiftUI
 import SwiftData
 
 struct RangeView: View {
-    @Environment(\.colorScheme) private var colorScheme    // MARK: - Range Mode
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
 
     enum RangeMode: String, CaseIterable {
         case normal = "Normal"
@@ -17,8 +19,6 @@ struct RangeView: View {
             }
         }
     }
-
-    // MARK: - Metric
 
     enum Metric: String, CaseIterable, Identifiable {
         case kcal = "kcal"
@@ -37,7 +37,6 @@ struct RangeView: View {
         }
 
         var dotColor: Color {
-            // Uses your existing palette if present; otherwise falls back safely
             switch self {
             case .kcal: return Color.secondary.opacity(0.65)
             case .carbs: return Color.woypSand
@@ -48,7 +47,6 @@ struct RangeView: View {
         }
 
         var bandColor: Color {
-            // Calm neutral band that works in light/dark
             Color.secondary.opacity(0.16)
         }
 
@@ -57,19 +55,11 @@ struct RangeView: View {
         }
     }
 
-    // MARK: - Data
-
-    @Environment(\.dismiss) private var dismiss
-
     @Query(sort: \Day.date, order: .reverse) private var days: [Day]
     @Query(sort: \Entry.createdAt, order: .reverse) private var entries: [Entry]
 
-    // MARK: - UI State
-
     @State private var mode: RangeMode = .normal
     @State private var showingEdit = false
-
-    // MARK: - Constants (your chosen defaults)
 
     private let bandHeight: CGFloat = 28
 
@@ -118,9 +108,10 @@ struct RangeView: View {
 
                 Spacer(minLength: 24)
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
+        .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -133,22 +124,18 @@ struct RangeView: View {
         }
     }
 
-    // MARK: - Header
-
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Range guide")
-                .font(.system(size: 38, weight: .semibold))
-                .tracking(-0.6)
+                .font(.system(size: 34, weight: .semibold))
+                .tracking(-0.4)
 
-            Text("A calm visual band around the aims you set. Nothing more.")
-                .font(.system(size: 18))
+            Text("Track Macros over time. Correct for Holidays or Illness if needed")
+                .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(.secondary)
         }
-        .padding(.top, 6)
+        .padding(.top, 10)
     }
-
-    // MARK: - Cards
 
     private func rangeCard(for metric: Metric) -> some View {
 
@@ -177,11 +164,10 @@ struct RangeView: View {
                 values: values,
                 dotColor: metric.dotColor
             )
-            .frame(height: 92) // space above/below so distance is visible
+            .frame(height: 92)
 
-            // Keep it simple: just show Aim (no low/high numbers)
             HStack {
-                Text(metric.unit.isEmpty ? "Aim" : "Aim")
+                Text("Aim")
                     .foregroundStyle(.secondary)
 
                 Spacer()
@@ -199,11 +185,13 @@ struct RangeView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.10) : Color.woypSlate.opacity(0.15))
+                .fill(
+                    colorScheme == .dark
+                    ? Color.white.opacity(0.10)
+                    : Color.woypSlate.opacity(0.15)
+                )
         )
     }
-
-    // MARK: - Calculations
 
     private func makeRange(aim: Double?, margin: Double) -> (low: Double, high: Double)? {
         guard let aim, aim > 0 else { return nil }
@@ -220,10 +208,8 @@ struct RangeView: View {
         }
     }
 
-    /// Returns up to `limit` most recent days that have any entries, with totals for that metric.
     private func recentDailyTotals(metric: Metric, limit: Int) -> [(date: Date, value: Double)] {
 
-        // Group entries by dayStart
         var byDay: [Date: [Entry]] = [:]
         for e in entries {
             guard let d = e.day else { continue }
@@ -231,7 +217,6 @@ struct RangeView: View {
             byDay[start, default: []].append(e)
         }
 
-        // Sort dayStart descending
         let dayStarts = byDay.keys.sorted(by: >)
 
         var result: [(date: Date, value: Double)] = []
@@ -256,12 +241,11 @@ struct RangeView: View {
             if result.count >= limit { break }
         }
 
-        // Display left-to-right oldest -> newest
         return result.sorted(by: { $0.date < $1.date })
     }
 }
 
-// MARK: - RangeBand (self-contained, no ViewBuilder issues)
+// MARK: - RangeBand
 
 private struct RangeBand: View {
 
@@ -278,7 +262,6 @@ private struct RangeBand: View {
             let w = geo.size.width
             let h = geo.size.height
 
-            // Determine vertical scale
             let minV: Double = {
                 if let r = range {
                     let pad = max((r.high - r.low) * 0.6, 1)
@@ -301,7 +284,6 @@ private struct RangeBand: View {
 
             ZStack {
 
-                // Band
                 if let r = range {
 
                     let yLow = positionY(value: r.low, minV: minV, maxV: maxV, height: h)
@@ -321,7 +303,6 @@ private struct RangeBand: View {
                         .position(x: w / 2, y: h / 2)
                 }
 
-                // Dots (only actual values; no ghost dots)
                 ForEach(Array(values.enumerated()), id: \.offset) { idx, v in
                     Circle()
                         .fill(dotColor)
@@ -329,7 +310,7 @@ private struct RangeBand: View {
                         .position(
                             x: xPosition(index: idx, count: values.count, width: w),
                             y: max(6, min(positionY(value: v, minV: minV, maxV: maxV, height: h), h - 6))
-                            )
+                        )
                 }
             }
         }
@@ -350,7 +331,7 @@ private struct RangeBand: View {
     }
 }
 
-// MARK: - Edit Sheet (aim persistence)
+// MARK: - Edit Sheet
 
 private struct RangeEditSheet: View {
 
@@ -437,7 +418,7 @@ private struct RangeEditSheet: View {
     }
 }
 
-// MARK: - Tiny persistence helper
+// MARK: - Persistence
 
 private enum RangeAimStore {
     static func value(forKey key: String) -> Double? {

@@ -28,7 +28,7 @@ struct TrendView: View {
                         .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(.secondary)
                 }
-                .padding(.top, 6)
+                .padding(.top, 10)
 
                 Picker("", selection: $mode) {
                     Text(Mode.daily.rawValue).tag(Mode.daily)
@@ -70,13 +70,11 @@ struct TrendView: View {
 
                 Spacer(minLength: 18)
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
         .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.woypSlate.opacity(0.15), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Trend")
@@ -114,7 +112,7 @@ struct TrendView: View {
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.woypSlate.opacity(0.05))
+                    .fill(Color.woypSlate.opacity(0.06))
             )
         }
         .frame(height: 470)
@@ -176,7 +174,8 @@ private struct ConcentricTrendRings: View {
                     )
                     .frame(width: size, height: size)
                     .opacity(animateRings ? 1 : 0)
-                    .opacity(idx == 0 ? 1.0 : 0.83)                }
+                    .opacity(idx == 0 ? 1.0 : 0.83)
+                }
 
                 Text(showAsPercent ? "Macros by % of calories" : "Macros by grams")
                     .font(.subheadline.weight(.medium))

@@ -117,7 +117,8 @@ struct TodayView: View {
                                     .foregroundStyle(.secondary)
                                     .offset(x: size * 0.28, y: -size * 0.28)
                             }
-                                                      }
+                        }
+                        
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     }
                     .frame(height: 300)
@@ -126,7 +127,9 @@ struct TodayView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                             logPulse = false
                         }
-                    }                }
+                    }
+                }
+                    
                 .buttonStyle(PressableCardStyle())
                 
                 // Explainer
