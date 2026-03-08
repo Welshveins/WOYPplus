@@ -13,7 +13,7 @@ struct QuickAddSheet: View {
     @State private var showingFruit = false   // ✅ NEW
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 18) {
 
             // Header
             VStack(alignment: .leading, spacing: 6) {
@@ -55,7 +55,7 @@ struct QuickAddSheet: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.woypSlate.opacity(0.06))
+                    .fill(Color.woypSlate.opacity(0.08))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
                             .stroke(Color.white.opacity(0.10), lineWidth: 1)
@@ -66,6 +66,7 @@ struct QuickAddSheet: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 18)
+        .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {

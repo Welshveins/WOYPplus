@@ -8,11 +8,11 @@ struct RecipesBrowseView: View {
     @Environment(\.modelContext) private var ctx
     @Environment(\.dismiss) private var dismiss
 
-    // Simple query; we sort A–Z in `filtered`.
     @Query private var recipes: [Recipe]
 
     @State private var queryText = ""
-
+    @State private var mealFilter: MealSlot? = nil
+    
     @State private var selectedRecipe: Recipe?
     @State private var editingRecipe: Recipe?
     @State private var showingNewRecipeSheet = false
@@ -23,7 +23,6 @@ struct RecipesBrowseView: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
 
-    // NEW: quick “Add to meal” from Recipes
     @State private var pendingLogRecipe: Recipe?
     @State private var logRecipe: Recipe?
     @State private var logMealSlot: MealSlot = MealSlot.defaultSlot(for: Date())
@@ -33,7 +32,11 @@ struct RecipesBrowseView: View {
         let q = queryText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         return recipes
-            .filter { q.isEmpty || $0.title.lowercased().contains(q) }
+            .filter { recipe in
+                let matchesSearch = q.isEmpty || recipe.title.lowercased().contains(q)
+                let matchesMeal = mealFilter == nil || recipe.categoryRaw.caseInsensitiveCompare(mealFilter!.displayName) == .orderedSame
+                return matchesSearch && matchesMeal
+            }
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
@@ -58,11 +61,20 @@ struct RecipesBrowseView: View {
                     .buttonStyle(PressableCardStyle())
                 }
 
-                // MARK: Search
+                // MARK: Search + Filter
                 Section {
                     TextField("Search recipes", text: $queryText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
+
+                    Picker("Meal filter", selection: $mealFilter) {
+                        Text("All").tag(MealSlot?.none)
+                        Text("Breakfast").tag(MealSlot?.some(.breakfast))
+                        Text("Lunch").tag(MealSlot?.some(.lunch))
+                        Text("Dinner").tag(MealSlot?.some(.dinner))
+                        Text("Snacks").tag(MealSlot?.some(.snacks))
+                    }
+                    .pickerStyle(.segmented)
                 }
 
                 // MARK: Recipes list
@@ -77,8 +89,7 @@ struct RecipesBrowseView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
-                    }
-                    else {
+                    } else {
                         ForEach(filtered) { r in
                             Button {
                                 selectedRecipe = r
@@ -104,10 +115,8 @@ struct RecipesBrowseView: View {
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing) {
 
-                                // NEW: Add to meal (does not constrain “type” — just a quick picker)
                                 Button {
                                     pendingLogRecipe = r
-                                    // default slot for now; user chooses next
                                     logMealSlot = MealSlot.defaultSlot(for: Date())
                                     showingMealPicker = true
                                 } label: {
@@ -132,6 +141,9 @@ struct RecipesBrowseView: View {
                     }
                 }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Color.woypSlate.opacity(0.15).ignoresSafeArea())
             .navigationTitle("Recipes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -150,7 +162,6 @@ struct RecipesBrowseView: View {
                 }
             }
 
-            // NEW: meal picker for “Add to meal”
             .confirmationDialog(
                 "Add to meal",
                 isPresented: $showingMealPicker,
@@ -163,7 +174,6 @@ struct RecipesBrowseView: View {
                 Button("Cancel", role: .cancel) { pendingLogRecipe = nil }
             }
 
-            // Import (WOYPPlus share format first, then Foundation)
             .fileImporter(
                 isPresented: $showingImporter,
                 allowedContentTypes: [.json],
@@ -172,7 +182,6 @@ struct RecipesBrowseView: View {
                 handleImport(result)
             }
 
-            // Browse/share detail screen (NOT logging)
             .sheet(item: $selectedRecipe) { r in
                 NavigationStack {
                     BrowseRecipeDetailView(
@@ -190,7 +199,6 @@ struct RecipesBrowseView: View {
                 .presentationDetents([.large])
             }
 
-            // NEW: Log recipe (from recipes browse)
             .sheet(item: $logRecipe) { r in
                 RecipeServingsSheet(
                     recipe: r,
@@ -199,14 +207,12 @@ struct RecipesBrowseView: View {
                 )
             }
 
-            // Edit recipe
             .sheet(item: $editingRecipe) { r in
                 NavigationStack {
                     RecipeBuilderView(existingRecipe: r)
                 }
             }
 
-            // New recipe
             .sheet(isPresented: $showingNewRecipeSheet) {
                 NavigationStack {
                     RecipeBuilderView()
@@ -258,7 +264,6 @@ struct RecipesBrowseView: View {
             do {
                 let data = try Data(contentsOf: url)
 
-                // 1) WOYP Plus share file
                 if let didImport = try? RecipeShareImport.importRecipe(from: data, into: ctx) {
                     show(
                         didImport ? "Recipe added" : "Already exists",
@@ -267,7 +272,6 @@ struct RecipesBrowseView: View {
                     return
                 }
 
-                // 2) Foundation single recipe export fallback
                 if let didImport = try? FoundationRecipeImport.importRecipe(from: data, into: ctx) {
                     show(
                         didImport ? "Recipe added" : "Already exists",
@@ -314,8 +318,14 @@ struct RecipesBrowseView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(14)
-        .buttonStyle(PressableCardStyle())
-        
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color.woypSlate.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+        )
     }
 
     @ViewBuilder
