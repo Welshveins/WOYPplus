@@ -162,7 +162,8 @@ struct RangeView: View {
                 bandColor: metric.bandColor,
                 range: range,
                 values: values,
-                dotColor: metric.dotColor
+                dotColor: metric.dotColor,
+                scalePadMultiplier: metric == .fat ? 2.2 : 1.0
             )
             .frame(height: 92)
 
@@ -254,7 +255,8 @@ private struct RangeBand: View {
     let range: (low: Double, high: Double)?
     let values: [Double]
     let dotColor: Color
-
+    let scalePadMultiplier: Double
+    
     var body: some View {
 
         GeometryReader { geo in
@@ -264,7 +266,7 @@ private struct RangeBand: View {
 
             let minV: Double = {
                 if let r = range {
-                    let pad = max((r.high - r.low) * 0.6, 1)
+                    let pad = max((r.high - r.low) * (0.8 * scalePadMultiplier), 6)
                     return max(0, r.low - pad)
                 } else {
                     let vMin = values.min() ?? 0
@@ -274,7 +276,7 @@ private struct RangeBand: View {
 
             let maxV: Double = {
                 if let r = range {
-                    let pad = max((r.high - r.low) * 0.6, 1)
+                    let pad = max((r.high - r.low) * (0.8 * scalePadMultiplier), 6)
                     return r.high + pad
                 } else {
                     let vMax = values.max() ?? 1

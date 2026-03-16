@@ -22,6 +22,9 @@ struct RecipeBuilderView: View {
     @State private var uiImage: UIImage?
     @State private var photoData: Data?
 
+    // Ingredient editing
+    @State private var editingIngredient: DraftIngredient?
+
     // Sheets
     private enum ActiveSheet: Identifiable {
         case addIngredientSource
@@ -75,9 +78,6 @@ struct RecipeBuilderView: View {
                     Button(existingRecipe == nil ? "Save" : "Update") {
                         saveRecipe()
                     }
-                    // ✅ CHANGE:
-                    // - New recipe: must have title + at least 1 ingredient
-                    // - Edit recipe: title is enough (allows updating photo only)
                     .disabled(
                         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         || (existingRecipe == nil && draftIngredients.isEmpty)
@@ -176,6 +176,24 @@ struct RecipeBuilderView: View {
                     photoData = image.jpegData(compressionQuality: 0.85)
                 }
             }
+            .sheet(item: $editingIngredient) { ingredient in
+                NavigationStack {
+                    EditDraftIngredientSheet(
+                        ingredient: ingredient,
+                        onSave: { updated in
+                            updateDraftIngredient(updated)
+                            editingIngredient = nil
+                        },
+                        onDelete: {
+                            deleteDraft(ingredient)
+                            editingIngredient = nil
+                        },
+                        onClose: {
+                            editingIngredient = nil
+                        }
+                    )
+                }
+            }
             .onChange(of: selectedPhotoItem) { _, newItem in
                 loadImage(newItem)
             }
@@ -187,7 +205,11 @@ struct RecipeBuilderView: View {
         }
     }
 
-    // MARK: - Sections
+
+    // MARK: - Main sections
+
+    
+    // MARK: - RecipeBuilder sections kept local for now
 
     private var photoSection: some View {
         Section("Photo") {
@@ -270,26 +292,36 @@ struct RecipeBuilderView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(draftIngredients) { d in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(d.name)
-                                .font(.headline)
+                    Button {
+                        editingIngredient = d
+                    } label: {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(d.name)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
 
-                            Text("\(Int(d.amountGrams.rounded())) g • \(Int(d.kcalPer100g.rounded())) kcal/100g")
-                                .font(.subheadline)
+                                Text("\(Int(d.amountGrams.rounded())) g • \(Int(d.kcalPer100g.rounded())) kcal/100g")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.secondary)
                         }
-
-                        Spacer()
-
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             deleteDraft(d)
                         } label: {
-                            Image(systemName: "trash")
+                            Label("Delete", systemImage: "trash")
                         }
-                        .buttonStyle(.borderless)
                     }
-                    .padding(.vertical, 2)
                 }
             }
 
@@ -322,7 +354,7 @@ struct RecipeBuilderView: View {
         }
     }
 
-    // MARK: - Derived totals
+    // MARK: - Totals
 
     private var totalKcal: Double {
         draftIngredients.reduce(0) { $0 + ($1.kcalPer100g * $1.amountGrams / 100.0) }
@@ -340,7 +372,7 @@ struct RecipeBuilderView: View {
         draftIngredients.reduce(0) { $0 + ($1.fibrePer100g * $1.amountGrams / 100.0) }
     }
 
-    // MARK: - Hydration (edit mode)
+    // MARK: - Edit mode hydration
 
     private func hydrateFromExistingIfNeeded() {
         guard let r = existingRecipe else { return }
@@ -387,7 +419,7 @@ struct RecipeBuilderView: View {
         }
     }
 
-    // MARK: - Draft ops
+    // MARK: - Draft ingredient helpers
 
     private func addDraftIngredient(from pick: FoodPickResult) {
         let g = max(0.0, pick.grams)
@@ -407,11 +439,16 @@ struct RecipeBuilderView: View {
         )
     }
 
+    private func updateDraftIngredient(_ updated: DraftIngredient) {
+        guard let idx = draftIngredients.firstIndex(where: { $0.id == updated.id }) else { return }
+        draftIngredients[idx] = updated
+    }
+
     private func deleteDraft(_ d: DraftIngredient) {
         draftIngredients.removeAll { $0.id == d.id }
     }
 
-    // MARK: - Save
+    // MARK: - Save / update recipe
 
     private func saveRecipe() {
 
@@ -493,9 +530,11 @@ struct RecipeBuilderView: View {
     }
 }
 
+
+// MARK: - Builder support models
 // MARK: - Draft ingredient
 
-private struct DraftIngredient: Identifiable, Hashable {
+struct DraftIngredient: Identifiable, Hashable {
     let id: UUID
     var name: String
     var amountGrams: Double
@@ -506,558 +545,7 @@ private struct DraftIngredient: Identifiable, Hashable {
     var fibrePer100g: Double
 }
 
-// MARK: - Totals row UI
 
-private struct TotalsRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text(value)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-//////////////////////////////////////////////////////////////////
-/// MARK: - Add ingredient source picker
-//////////////////////////////////////////////////////////////////
-
-private struct AddIngredientSourceView: View {
-
-    let onScanBarcode: () -> Void
-    let onManual: () -> Void
-    let onBasics: () -> Void
-    let onMyFoods: () -> Void
-    let onAllFoods: () -> Void
-    let onClose: () -> Void
-
-    var body: some View {
-        List {
-            Section {
-                Text("Choose the fastest way to add an ingredient.")
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Add ingredient") {
-                Button { onScanBarcode() } label: {
-                    Label("Scan barcode", systemImage: "barcode.viewfinder")
-                }
-                .buttonStyle(PressableCardStyle())
-                
-                Button { onManual() } label: {
-                    Label("Manual entry", systemImage: "square.and.pencil")
-                }
-                .buttonStyle(PressableCardStyle())
-
-                Button { onBasics() } label: {
-                    Label("Basics", systemImage: "list.bullet")
-                }
-                .buttonStyle(PressableCardStyle())
-                
-                Button { onMyFoods() } label: {
-                    Label("My foods", systemImage: "person.crop.circle")
-                }
-                .buttonStyle(PressableCardStyle())
-
-                Button { onAllFoods() } label: {
-                    Label("Add ingredient (foods)", systemImage: "fork.knife")
-                }
-                .buttonStyle(PressableCardStyle())
-            }
-        }
-        .navigationTitle("Add ingredient")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { onClose() }
-            }
-        }
-    }
-}
-
-//////////////////////////////////////////////////////////////////
-/// MARK: - Food picker list (Basics / My foods / All)
-//////////////////////////////////////////////////////////////////
-
-private struct FoodPickerListView: View {
-
-    enum Mode {
-        case basics
-        case myFoods
-        case allFoods
-
-        var title: String {
-            switch self {
-            case .basics: return "Basics"
-            case .myFoods: return "My foods"
-            case .allFoods: return "Foods"
-            }
-        }
-    }
-
-    @Environment(\.modelContext) private var ctx
-    @Query(sort: \Food.createdAt, order: .forward) private var foodsByCreatedAt: [Food]
-    @Query(sort: \Food.name) private var foodsByName: [Food]
-
-    let mode: Mode
-    let onPick: (Food) -> Void
-    let onClose: () -> Void
-
-    @State private var queryText = ""
-
-    var body: some View {
-        List {
-            Section {
-                TextField("Search foods", text: $queryText)
-            }
-
-            if filtered.isEmpty {
-                Section {
-                    Text("No foods found.")
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Section(mode.title) {
-                    ForEach(filtered) { f in
-                        Button {
-                            onPick(f)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(f.name)
-                                    .font(.headline)
-
-                                Text("\(Int(f.kcalPer100g.rounded())) kcal per 100g")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 2)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .navigationTitle(mode.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { onClose() }
-            }
-        }
-        .task {
-            FoodSeeder.seedIfNeeded(into: ctx)
-        }
-    }
-
-    private var baseList: [Food] {
-        switch mode {
-        case .allFoods:
-            return foodsByName
-
-        case .basics:
-            let earliest = Array(foodsByCreatedAt.prefix(60))
-            return earliest.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-
-        case .myFoods:
-            let latest = Array(foodsByCreatedAt.suffix(80))
-            return latest.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        }
-    }
-
-    private var filtered: [Food] {
-        let q = queryText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return baseList }
-        return baseList.filter { $0.name.lowercased().contains(q) }
-    }
-}
-
-//////////////////////////////////////////////////////////////////
-/// MARK: - Manual food entry (creates Food, then returns it)
-//////////////////////////////////////////////////////////////////
-
-private struct ManualFoodEntryView: View {
-
-    @Environment(\.modelContext) private var ctx
-
-    let prefillBarcode: String?
-    let onSaved: (Food) -> Void
-    let onClose: () -> Void
-
-    @State private var name = ""
-    @State private var barcode = ""
-
-    @State private var kcalPer100g = ""
-    @State private var carbsPer100g = ""
-    @State private var proteinPer100g = ""
-    @State private var fatPer100g = ""
-    @State private var fibrePer100g = ""
-
-    @State private var portionName = ""
-    @State private var portionGrams = ""
-
-    var body: some View {
-        Form {
-
-            if !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-
-                Section {
-                    Text(barcode)
-                        .font(.footnote.monospaced())
-                        .foregroundStyle(.secondary)
-
-                } header: {
-                    Text("Barcode")
-
-                } footer: {
-                    Text("Barcode capture only (no lookup yet).")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("Food") {
-                TextField("Name", text: $name)
-
-                TextField("Barcode (optional)", text: $barcode)
-                    .font(.footnote.monospaced())
-            }
-
-            Section("Macros per 100g") {
-                numberField("kcal / 100g", text: $kcalPer100g)
-                numberField("Carbs (g)", text: $carbsPer100g)
-                numberField("Protein (g)", text: $proteinPer100g)
-                numberField("Fat (g)", text: $fatPer100g)
-                numberField("Fibre (g)", text: $fibrePer100g)
-            }
-
-            Section("Default portion (optional)") {
-                TextField("Portion label (e.g. 1 egg)", text: $portionName)
-                numberField("Portion grams (e.g. 60)", text: $portionGrams)
-            }
-
-            Button("Save food") {
-                save()
-            }
-            .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .navigationTitle("Manual food")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { onClose() }
-            }
-        }
-        .onAppear {
-            if let prefillBarcode, !prefillBarcode.isEmpty {
-                barcode = prefillBarcode
-            }
-        }
-    }
-
-    private func numberField(_ label: String, text: Binding<String>) -> some View {
-        TextField(label, text: text)
-            .keyboardType(.decimalPad)
-    }
-
-    private func save() {
-        let safeName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !safeName.isEmpty else { return }
-
-        let food = Food(
-            name: safeName,
-            kcalPer100g: Double(kcalPer100g) ?? 0,
-            carbsPer100g: Double(carbsPer100g) ?? 0,
-            proteinPer100g: Double(proteinPer100g) ?? 0,
-            fatPer100g: Double(fatPer100g) ?? 0,
-            fibrePer100g: Double(fibrePer100g) ?? 0,
-            defaultPortionName: portionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : portionName,
-            defaultPortionGrams: Double(portionGrams)
-        )
-
-        ctx.insert(food)
-        try? ctx.save()
-
-        onSaved(food)
-    }
-}
-
-//////////////////////////////////////////////////////////////////
-/// MARK: - Barcode lookup (camera + OpenFoodFacts -> Food)
-//////////////////////////////////////////////////////////////////
-
-private struct RecipeBarcodeLookupView: View {
-
-    @Environment(\.modelContext) private var ctx
-
-    let onPickedFood: (Food) -> Void
-    let onCancel: () -> Void
-
-    @State private var last = ""
-    @State private var scannedCode: String?
-    @State private var product: OFFProduct?
-    @State private var errorText: String?
-    @State private var isLoading = false
-
-    var body: some View {
-        Group {
-            if let product {
-                foundProductView(product)
-            } else {
-                ZStack {
-                    BarcodeScannerRepresentable(
-                        onFound: { code in
-                            guard !code.isEmpty else { return }
-                            guard code != last else { return }
-                            last = code
-                            scannedCode = code
-                            lookup(code)
-                        },
-                        onError: { err in
-                            errorText = err.localizedDescription
-                        }
-                    )
-                    .ignoresSafeArea()
-
-                    overlay
-                }
-                .navigationTitle("Scan barcode")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Close") { onCancel() }
-                    }
-                }
-            }
-        }
-    }
-
-    private var overlay: some View {
-        VStack {
-            Spacer()
-
-            VStack(spacing: 10) {
-                Text("Scan a barcode")
-                    .font(.headline)
-
-                if isLoading {
-                    Text("Looking up…")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else if let errorText {
-                    Text(errorText)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                } else {
-                    Text("Hold the barcode in the frame.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                Button("Cancel") { onCancel() }
-                    .padding(.top, 4)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(0.55))
-            )
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 22)
-        }
-    }
-
-    private func foundProductView(_ product: OFFProduct) -> some View {
-        let n = product.nutriments
-
-        return Form {
-            Section("Product") {
-                Text(product.displayName)
-                if let b = product.brands, !b.isEmpty {
-                    Text(b)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                if let c = product.code, !c.isEmpty {
-                    Text("Barcode: \(c)")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("Per 100 g") {
-                row("kcal", n?.energyKcal_100g)
-                row("Carbs (g)", n?.carbohydrates_100g)
-                row("Protein (g)", n?.proteins_100g)
-                row("Fat (g)", n?.fat_100g)
-                row("Fibre (g)", n?.fiber_100g)
-            }
-
-            Section {
-                Button("Use as ingredient") {
-                    createFood(from: product)
-                }
-                .disabled(!(n?.hasUsableCore ?? false))
-
-                Button("Scan again") {
-                    self.product = nil
-                    self.scannedCode = nil
-                    self.errorText = nil
-                    self.isLoading = false
-                    self.last = ""
-                }
-                .foregroundStyle(.secondary)
-            }
-        }
-        .navigationTitle("Barcode found")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { onCancel() }
-            }
-        }
-    }
-
-    private func row(_ label: String, _ v: Double?) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(v.map { "\(Int($0.rounded()))" } ?? "—")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func lookup(_ code: String) {
-        Task {
-            isLoading = true
-            errorText = nil
-            defer { isLoading = false }
-
-            do {
-                if let p = try await OpenFoodFactsAPI.fetchByBarcode(code) {
-                    if let n = p.nutriments, n.hasUsableCore {
-                        product = p
-                    } else {
-                        errorText = "No usable nutrition data found."
-                    }
-                } else {
-                    errorText = "No product found."
-                }
-            } catch {
-                errorText = error.localizedDescription
-            }
-        }
-    }
-
-    private func createFood(from product: OFFProduct) {
-        guard let n = product.nutriments, n.hasUsableCore else { return }
-
-        let food = Food(
-            name: product.displayName,
-            kcalPer100g: n.energyKcal_100g ?? 0,
-            carbsPer100g: n.carbohydrates_100g ?? 0,
-            proteinPer100g: n.proteins_100g ?? 0,
-            fatPer100g: n.fat_100g ?? 0,
-            fibrePer100g: n.fiber_100g ?? 0,
-            defaultPortionName: nil,
-            defaultPortionGrams: nil
-        )
-
-        ctx.insert(food)
-        try? ctx.save()
-
-        onPickedFood(food)
-    }
-}
-
-//////////////////////////////////////////////////////////////////
-/// MARK: - Barcode capture (camera)
-//////////////////////////////////////////////////////////////////
-
-private struct BarcodeScannerRepresentable: UIViewControllerRepresentable {
-
-    let onFound: (String) -> Void
-    let onError: (Error) -> Void
-
-    func makeUIViewController(context: Context) -> ScannerVC {
-        let vc = ScannerVC()
-        vc.onFound = onFound
-        vc.onError = onError
-        return vc
-    }
-
-    func updateUIViewController(_ uiViewController: ScannerVC, context: Context) {}
-
-    final class ScannerVC: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
-
-        var onFound: ((String) -> Void)?
-        var onError: ((Error) -> Void)?
-
-        private let session = AVCaptureSession()
-        private var previewLayer: AVCaptureVideoPreviewLayer?
-
-        override func viewDidLoad() {
-            super.viewDidLoad()
-            view.backgroundColor = .black
-            configure()
-        }
-
-        override func viewDidLayoutSubviews() {
-            super.viewDidLayoutSubviews()
-            previewLayer?.frame = view.bounds
-        }
-
-        private func configure() {
-            do {
-                guard let device = AVCaptureDevice.default(for: .video) else {
-                    throw NSError(domain: "BarcodeScanner", code: 1, userInfo: [NSLocalizedDescriptionKey: "No camera available"])
-                }
-
-                let input = try AVCaptureDeviceInput(device: device)
-                if session.canAddInput(input) { session.addInput(input) }
-
-                let output = AVCaptureMetadataOutput()
-                if session.canAddOutput(output) { session.addOutput(output) }
-
-                output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-                output.metadataObjectTypes = [
-                    .ean8, .ean13, .upce,
-                    .code39, .code93, .code128,
-                    .qr, .pdf417, .dataMatrix, .aztec
-                ]
-
-                let preview = AVCaptureVideoPreviewLayer(session: session)
-                preview.videoGravity = .resizeAspectFill
-                view.layer.addSublayer(preview)
-                previewLayer = preview
-
-                session.startRunning()
-
-            } catch {
-                onError?(error)
-            }
-        }
-
-        func metadataOutput(_ output: AVCaptureMetadataOutput,
-                            didOutput metadataObjects: [AVMetadataObject],
-                            from connection: AVCaptureConnection) {
-            guard let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-                  let code = obj.stringValue else { return }
-            onFound?(code)
-        }
-
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            if session.isRunning { session.stopRunning() }
-        }
-    }
-}
 
 //////////////////////////////////////////////////////////////////
 /// MARK: - Camera (real device)

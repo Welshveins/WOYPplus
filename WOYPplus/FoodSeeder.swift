@@ -230,7 +230,24 @@ enum FoodSeeder {
                 defaultPortionName: "1/2 cucumber", defaultPortionGrams: 150,
                 isUserCreated: false
             ),
-
+            Food(
+                name: "Avacado",
+                kcalPer100g: 150, carbsPer100g: 9, proteinPer100g: 2, fatPer100g: 15, fibrePer100g: 8,
+                defaultPortionName: "1 pepper", defaultPortionGrams: 120,
+                isUserCreated: false
+            ),
+            Food(
+                name: "Cauliflower",
+                kcalPer100g: 27, carbsPer100g: 5, proteinPer100g: 2, fatPer100g: 0.3, fibrePer100g: 2,
+                defaultPortionName: "cauliflower", defaultPortionGrams: 120,
+                isUserCreated: false
+            ),
+            Food(
+                name: "Cabbage",
+                kcalPer100g: 25, carbsPer100g: 6, proteinPer100g: 1, fatPer100g: 0.3, fibrePer100g: 3,
+                defaultPortionName: "cabbage", defaultPortionGrams: 120,
+                isUserCreated: false
+            ),
             Food(
                 name: "Pepper",
                 kcalPer100g: 31, carbsPer100g: 6, proteinPer100g: 1, fatPer100g: 0.3, fibrePer100g: 2.1,
@@ -273,7 +290,12 @@ enum FoodSeeder {
                 defaultPortionName: "2 Sausages", defaultPortionGrams: 110,
                 isUserCreated: false
             ),
-            
+            Food(
+                name: "Butter Beans",
+                kcalPer100g: 108, carbsPer100g: 15, proteinPer100g: 7, fatPer100g: 1, fibrePer100g: 7.0,
+                defaultPortionName: "half tin", defaultPortionGrams: 200,
+                isUserCreated: false
+            ),
             Food(
                 name: "Baked Beans",
                 kcalPer100g: 90, carbsPer100g: 13.2, proteinPer100g: 4.6, fatPer100g: 0.4, fibrePer100g: 5.0,
