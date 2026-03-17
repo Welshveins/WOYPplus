@@ -17,17 +17,21 @@ struct AddPlateSheet: View {
     @State private var mealSlot: MealSlot = MealSlot.defaultSlot(for: Date())
     @State private var userManuallyPickedSlot = false
 
-    // Persisted settings
     @AppStorage("addPlate_cropToCentre") private var cropToCentre: Bool = true
+    @AppStorage("addPlate_addOns") private var addOnsRaw: String = ""
 
-    // Persisted nudges (B1)
-    @AppStorage("addPlate_plateMix") private var plateMixRaw: String = ""        // empty = none selected
-    @AppStorage("addPlate_vessel") private var vesselRaw: String = ""            // empty = none selected
-    @AppStorage("addPlate_addOns") private var addOnsRaw: String = ""            // comma-separated raw values
-
-    @State private var plateMix: PlateMix? = nil
-    @State private var vessel: Vessel? = nil
     @State private var addOns: Set<RichAddOn> = []
+
+    // New Your Plate flow state
+    @State private var suggestedMealName: String = ""
+    @State private var portionSize: PortionSize = .standardPlate
+    @State private var carbType: CarbType = .rice
+    @State private var proteinType: ProteinType = .chicken
+    @State private var vegType: VegType = .mixedVeg
+    @State private var carbPercent: Double = 40
+    @State private var proteinPercent: Double = 30
+    @State private var vegPercent: Double = 30
+    @State private var estimateAdjustment: EstimateAdjustment = .aboutRight
 
     // Photo
     @State private var showingCamera = false
@@ -39,8 +43,6 @@ struct AddPlateSheet: View {
     @State private var analysisLabel: String?
     @State private var lastVisionIdentifier: String?
 
-    // NEW: one-tap “about right” adjustment
-    @State private var richnessAdjustment: Double = 1.0
 
     // Macros
     @State private var kcal: String = ""
@@ -51,64 +53,216 @@ struct AddPlateSheet: View {
 
     // Stop overwriting once user edits
     @State private var userLockedMacros = false
+    @State private var isProgrammaticMacroFill = false
+    
+    // MARK: - New Your Plate enums
+
+    private enum PortionSize: String, CaseIterable, Identifiable, CustomStringConvertible {
+        case smallPlate
+        case standardPlate
+        case largePlate
+        case bowl
+        case largeBowl
+
+        var id: String { rawValue }
+
+        var display: String {
+            switch self {
+            case .smallPlate: return "Small plate"
+            case .standardPlate: return "Standard plate"
+            case .largePlate: return "Large plate"
+            case .bowl: return "Bowl"
+            case .largeBowl: return "Large bowl"
+            }
+        }
+
+        var description: String { display }
+
+        var multiplier: Double {
+            switch self {
+            case .smallPlate: return 0.80
+            case .standardPlate: return 1.00
+            case .largePlate: return 1.25
+            case .bowl: return 1.10
+            case .largeBowl: return 1.35
+            }
+        }
+    }
+    private enum CarbType: String, CaseIterable, Identifiable, CustomStringConvertible {
+        case rice
+        case pasta
+        case bread
+        case potatoes
+        case noodles
+        case other
+        var id: String { rawValue }
+        var display: String {
+            switch self {
+            case .rice: return "Rice"
+            case .pasta: return "Pasta"
+            case .bread: return "Bread"
+            case .potatoes: return "Potatoes"
+            case .noodles: return "Noodles"
+            case .other: return "Other"
+            }
+        }
+        var description: String { display }
+    }
+    private enum ProteinType: String, CaseIterable, Identifiable, CustomStringConvertible {
+        case chicken
+        case fish
+        case beef
+        case pork
+        case eggs
+        case beansTofu
+        case other
+        var id: String { rawValue }
+        var display: String {
+            switch self {
+            case .chicken: return "Chicken"
+            case .fish: return "Fish"
+            case .beef: return "Beef"
+            case .pork: return "Pork"
+            case .eggs: return "Eggs"
+            case .beansTofu: return "Beans / tofu"
+            case .other: return "Other"
+            }
+        }
+        var description: String { display }
+    }
+    private enum VegType: String, CaseIterable, Identifiable, CustomStringConvertible {
+        case mixedVeg
+        case leafyVeg
+        case rootVeg
+        case salad
+        case none
+        case other
+        var id: String { rawValue }
+        var display: String {
+            switch self {
+            case .mixedVeg: return "Mixed veg"
+            case .leafyVeg: return "Leafy veg"
+            case .rootVeg: return "Root veg"
+            case .salad: return "Salad"
+            case .none: return "None"
+            case .other: return "Other"
+            }
+        }
+        var description: String { display }
+    }
+    private enum EstimateAdjustment: String, CaseIterable, Identifiable, CustomStringConvertible {
+        case tooLow
+        case aboutRight
+        case tooHigh
+
+        var id: String { rawValue }
+
+        var display: String {
+            switch self {
+            case .tooLow: return "Too low"
+            case .aboutRight: return "About right"
+            case .tooHigh: return "Too high"
+            }
+        }
+
+        var description: String { display }
+
+        var multiplier: Double {
+            switch self {
+            case .tooLow: return 1.10
+            case .aboutRight: return 1.00
+            case .tooHigh: return 0.90
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                photoSection
-                detailsSection
-                whenSection
-                mealSection
-                macrosSection
-                infoSection
+            contentForm
+                .navigationTitle("Your plate")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { toolbarContent }
+                .sheet(isPresented: $showingCamera) {
+                    CameraPicker { image in
+                        uiImage = image
+                        runVision(on: image)
+                    }
+                }
+        }
+        .onAppear {
+            mealSlot = MealSlot.defaultSlot(for: when)
+            addOns = decodeAddOns(addOnsRaw)
+            if suggestedMealName.isEmpty {
+                suggestedMealName = title
             }
-            .navigationTitle("Your plate")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
-            .onAppear {
-                mealSlot = MealSlot.defaultSlot(for: when)
+        }
+        .onChange(of: addOns) { _, newValue in
+            addOnsRaw = encodeAddOns(newValue)
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: portionSize) { _, _ in
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: carbType) { _, _ in
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: proteinType) { _, _ in
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: vegType) { _, _ in
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: carbPercent) { _, _ in
+            balanceComposition(changed: .carb)
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: proteinPercent) { _, _ in
+            balanceComposition(changed: .protein)
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: vegPercent) { _, _ in
+            balanceComposition(changed: .veg)
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: estimateAdjustment) { _, _ in
+            guard !userLockedMacros else { return }
+            reapplyEstimateFromCurrentSelections()
+        }
+        .onChange(of: when) { _, newValue in
+            guard !userManuallyPickedSlot else { return }
+            mealSlot = MealSlot.defaultSlot(for: newValue)
+        }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            loadImage(newItem)
+        }
+        .onChange(of: kcal) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+        .onChange(of: carbs) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+        .onChange(of: protein) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+        .onChange(of: fat) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+        .onChange(of: fibre) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+    }
 
-                plateMix = plateMixRaw.isEmpty ? nil : PlateMix(rawValue: plateMixRaw)
-                vessel = vesselRaw.isEmpty ? nil : Vessel(rawValue: vesselRaw)
-                addOns = decodeAddOns(addOnsRaw)
-                richnessAdjustment = 1.0
-            }
-            .onChange(of: plateMix) { _, newValue in
-                plateMixRaw = newValue?.rawValue ?? ""
-            }
-            .onChange(of: vessel) { _, newValue in
-                vesselRaw = newValue?.rawValue ?? ""
-                if let id = lastVisionIdentifier {
-                    userLockedMacros = false
-                    applyHeuristic(for: id)
-                }
-            }
-            .onChange(of: addOns) { _, newValue in
-                addOnsRaw = encodeAddOns(newValue)
-                if let id = lastVisionIdentifier {
-                    userLockedMacros = false
-                    applyHeuristic(for: id)
-                }
-            }
-            .onChange(of: when) { _, newValue in
-                guard !userManuallyPickedSlot else { return }
-                mealSlot = MealSlot.defaultSlot(for: newValue)
-            }
-            .onChange(of: selectedPhotoItem) { _, newItem in
-                loadImage(newItem)
-            }
-            // Lock when user edits any macro field
-            .onChange(of: kcal) { _, _ in userLockedMacros = true }
-            .onChange(of: carbs) { _, _ in userLockedMacros = true }
-            .onChange(of: protein) { _, _ in userLockedMacros = true }
-            .onChange(of: fat) { _, _ in userLockedMacros = true }
-            .onChange(of: fibre) { _, _ in userLockedMacros = true }
-            .sheet(isPresented: $showingCamera) {
-                CameraPicker { image in
-                    uiImage = image
-                    runVision(on: image)
-                }
-            }
+    private var contentForm: some View {
+        Form {
+            photoSection
+            suggestedMealSection
+            foodTypeSection
+            compositionSection
+            portionSizeSection
+            whenSection
+            mealSection
+            modifiersSection
+            estimateAdjustmentSection
+            macrosSection
+            infoSection
         }
     }
 
@@ -142,12 +296,6 @@ struct AddPlateSheet: View {
             Toggle("Focus on centre", isOn: $cropToCentre)
                 .font(.footnote)
 
-            plateMixGrid
-
-            vesselPicker
-
-            addOnsGrid
-
             if isAnalysing {
                 HStack {
                     ProgressView()
@@ -164,120 +312,56 @@ struct AddPlateSheet: View {
         }
     }
 
-    private var plateMixGrid: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8)
-            ],
-            spacing: 8
-        ) {
-            ForEach(PlateMix.allCases) { mix in
-                let isSelected = (plateMix == mix)
 
-                Button {
-                    plateMix = mix
-                    if let id = lastVisionIdentifier {
-                        userLockedMacros = false
-                        applyHeuristic(for: id)
-                    }
-                } label: {
-                    Text(mix.display)
-                        .font(.system(size: 13, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(isSelected
-                                      ? Color.woypTeal.opacity(0.12)
-                                      : Color.woypSlate.opacity(0.07))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
+    // New locked flow UI sections
+    private var suggestedMealSection: some View {
+        Section("Meal") {
+            TextField("Meal name", text: mealNameBinding)
+
+            if let analysisLabel {
+                Text("Suggested from photo. You can edit this.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
-    private var vesselPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Vessel")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+    private var portionSizeSection: some View {
+        Section("Plate or bowl size") {
+            horizontalPickerRow(title: "Size", options: PortionSize.allCases, selection: $portionSize)
+        }
+    }
 
-            Picker("Vessel", selection: Binding<Vessel?>(
-                get: { vessel },
-                set: { vessel = $0 }
-            )) {
-                Text("None").tag(Vessel?.none)
-                ForEach(Vessel.allCases) { v in
-                    Text(v.display).tag(Optional(v))
+    private var foodTypeSection: some View {
+        Section("What is on the plate?") {
+            horizontalPickerRow(title: "Carb", options: CarbType.allCases, selection: $carbType)
+            horizontalPickerRow(title: "Protein", options: ProteinType.allCases, selection: $proteinType)
+            horizontalPickerRow(title: "Veg", options: VegType.allCases, selection: $vegType)
+        }
+    }
+
+    private var compositionSection: some View {
+        Section("Plate composition") {
+            percentageRow(title: "Carb", value: $carbPercent)
+            percentageRow(title: "Protein", value: $proteinPercent)
+            percentageRow(title: "Veg", value: $vegPercent)
+        }
+    }
+
+    private var modifiersSection: some View {
+        Section("Optional richness") {
+            modifiersGrid
+        }
+    }
+
+    private var estimateAdjustmentSection: some View {
+        Section("Estimate") {
+            Picker("Estimate", selection: $estimateAdjustment) {
+                ForEach(EstimateAdjustment.allCases) { item in
+                    Text(item.display).tag(item)
                 }
             }
             .pickerStyle(.segmented)
-        }
-        .padding(.top, 4)
-    }
-
-    private var addOnsGrid: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Rich add-ons")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 8),
-                    GridItem(.flexible(), spacing: 8)
-                ],
-                spacing: 8
-            ) {
-                ForEach(RichAddOn.allCases) { a in
-                    let isSelected = addOns.contains(a)
-
-                    Button {
-                        if isSelected {
-                            addOns.remove(a)
-                        } else {
-                            addOns.insert(a)
-                        }
-                    } label: {
-                        Text(a.display)
-                            .font(.system(size: 13, weight: .semibold))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(isSelected
-                                          ? Color.woypTeal.opacity(0.12)
-                                          : Color.woypSlate.opacity(0.07))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(.top, 2)
-    }
-
-    private var detailsSection: some View {
-        Section {
-            TextField("Description (optional)", text: $title)
         }
     }
 
@@ -306,6 +390,115 @@ struct AddPlateSheet: View {
         }
     }
 
+    // MARK: - Locked flow helpers
+
+    private var mealNameBinding: Binding<String> {
+        Binding(
+            get: { suggestedMealName.isEmpty ? title : suggestedMealName },
+            set: {
+                suggestedMealName = $0
+                title = $0
+            }
+        )
+    }
+
+    private var modifiersGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ],
+            spacing: 8
+        ) {
+            ForEach(RichAddOn.allCases) { addOn in
+                let isSelected = addOns.contains(addOn)
+
+                Button {
+                    if isSelected {
+                        addOns.remove(addOn)
+                    } else {
+                        addOns.insert(addOn)
+                    }
+                } label: {
+                    Text(addOn.display)
+                        .font(.system(size: 13, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(isSelected
+                                      ? Color.woypTeal.opacity(0.12)
+                                      : Color.woypSlate.opacity(0.07))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func horizontalPickerRow<Option: Identifiable & CaseIterable & Hashable>(
+        title: String,
+        options: Option.AllCases,
+        selection: Binding<Option>
+    ) -> some View where Option: CustomStringConvertible {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(options), id: \.id) { option in
+                        let isSelected = selection.wrappedValue == option
+
+                        Button {
+                            selection.wrappedValue = option
+                        } label: {
+                            Text(option.description)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(
+                                    Capsule()
+                                        .fill(isSelected
+                                              ? Color.woypTeal.opacity(0.12)
+                                              : Color.woypSlate.opacity(0.07))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func percentageRow(title: String, value: Binding<Double>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(Int(value.wrappedValue.rounded()))%")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            Slider(value: value, in: 0...100, step: 5)
+        }
+    }
+
     private var macrosSection: some View {
         Section("Best guess") {
 
@@ -325,10 +518,6 @@ struct AddPlateSheet: View {
             numberField("Fat (g)", text: $fat)
             numberField("Fibre (g)", text: $fibre)
 
-            if lastVisionIdentifier != nil {
-                richnessAdjustmentRow
-            }
-
             if let id = lastVisionIdentifier {
                 Button {
                     userLockedMacros = false
@@ -340,58 +529,37 @@ struct AddPlateSheet: View {
         }
     }
 
-    private var richnessAdjustmentRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Looks")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                richnessButton(title: "Lighter", value: 0.90)
-                richnessButton(title: "About right", value: 1.0)
-                richnessButton(title: "Richer", value: 1.10)
-            }
-        }
-        .padding(.top, 4)
-    }
-
-    private func richnessButton(title: String, value: Double) -> some View {
-        let isSelected = abs(richnessAdjustment - value) < 0.001
-
-        return Button {
-            guard let id = lastVisionIdentifier else { return }
-            userLockedMacros = false
-            richnessAdjustment = value
-            applyHeuristic(for: id)
-        } label: {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .multilineTextAlignment(.center)
-                .lineLimit(1)
-                .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
-                .frame(maxWidth: .infinity, minHeight: 36)
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isSelected
-                              ? Color.woypTeal.opacity(0.12)
-                              : Color.woypSlate.opacity(0.07))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
     private var infoSection: some View {
         Section {
             Text("This entry is marked as an estimate. You can confirm or edit it later.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func save() {
+        let entry = Entry(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            mealSlot: mealSlot,
+            carbsG: Double(carbs) ?? 0,
+            proteinG: Double(protein) ?? 0,
+            fatG: Double(fat) ?? 0,
+            fibreG: Double(fibre) ?? 0,
+            caloriesKcal: Double(kcal) ?? 0,
+            isEstimate: true,
+            day: day,
+            recipe: nil,
+            servings: 1,
+            createdAt: when
+        )
+
+        ctx.insert(entry)
+        try? ctx.save()
+        dismiss()
     }
 
     private var toolbarContent: some ToolbarContent {
@@ -428,7 +596,6 @@ struct AddPlateSheet: View {
             isAnalysing = true
             analysisLabel = nil
             lastVisionIdentifier = nil
-            richnessAdjustment = 1.0
         }
 
         let request = VNClassifyImageRequest { request, _ in
@@ -458,7 +625,10 @@ struct AddPlateSheet: View {
 
                 analysisLabel = "\(best.identifier) (\(Int(best.confidence * 100))%)"
                 lastVisionIdentifier = best.identifier
-                richnessAdjustment = 1.0
+
+                let suggestion = suggestedMeal(from: best.identifier)
+                suggestedMealName = suggestion
+                title = suggestion
 
                 guard !userLockedMacros else { return }
                 applyHeuristic(for: best.identifier)
@@ -474,66 +644,153 @@ struct AddPlateSheet: View {
     // MARK: - Heuristic mapping
 
     private func applyHeuristic(for label: String) {
-        let lower = label.lowercased()
+        let _ = label.lowercased()
+        reapplyEstimateFromCurrentSelections()
+    }
 
-        // Base guess (v1)
-        var base = Macros(k: 600, c: 60, p: 30, f: 25, fi: 5)
+    private enum ChangedComposition {
+        case carb
+        case protein
+        case veg
+    }
 
-        if lower.contains("chocolate") || lower.contains("candy") || lower.contains("sweet") {
-            base = Macros(k: 260, c: 30, p: 3, f: 14, fi: 2)
-        } else if lower.contains("pizza") {
-            base = Macros(k: 800, c: 90, p: 35, f: 35, fi: 5)
-        } else if lower.contains("burger") {
-            base = Macros(k: 750, c: 60, p: 40, f: 45, fi: 4)
-        } else if lower.contains("pasta") || lower.contains("noodle") {
-            base = Macros(k: 700, c: 100, p: 25, f: 20, fi: 5)
-        } else if lower.contains("rice") {
-            base = Macros(k: 650, c: 105, p: 20, f: 15, fi: 4)
-        } else if lower.contains("curry") || lower.contains("stew") || lower.contains("chilli") {
-            base = Macros(k: 750, c: 80, p: 35, f: 30, fi: 6)
-        } else if lower.contains("salad") {
-            base = Macros(k: 350, c: 20, p: 15, f: 25, fi: 6)
-        } else if lower.contains("sandwich") || lower.contains("wrap") {
-            base = Macros(k: 550, c: 55, p: 25, f: 22, fi: 5)
+    private func balanceComposition(changed: ChangedComposition) {
+        let total = carbPercent + proteinPercent + vegPercent
+        guard total != 100 else { return }
+
+        switch changed {
+        case .carb:
+            let remaining = max(0, 100 - carbPercent)
+            let otherTotal = max(1, proteinPercent + vegPercent)
+            proteinPercent = (proteinPercent / otherTotal) * remaining
+            vegPercent = 100 - carbPercent - proteinPercent
+
+        case .protein:
+            let remaining = max(0, 100 - proteinPercent)
+            let otherTotal = max(1, carbPercent + vegPercent)
+            carbPercent = (carbPercent / otherTotal) * remaining
+            vegPercent = 100 - proteinPercent - carbPercent
+
+        case .veg:
+            let remaining = max(0, 100 - vegPercent)
+            let otherTotal = max(1, carbPercent + proteinPercent)
+            carbPercent = (carbPercent / otherTotal) * remaining
+            proteinPercent = 100 - vegPercent - carbPercent
         }
 
-        // Apply Plate Mix (if selected)
-        var adjusted = plateMix?.apply(to: base) ?? base
+        carbPercent = (carbPercent / 5).rounded() * 5
+        proteinPercent = (proteinPercent / 5).rounded() * 5
+        vegPercent = max(0, 100 - carbPercent - proteinPercent)
+    }
 
-        // Apply Vessel (if selected)
-        if let vessel {
-            adjusted = adjusted.scaled(by: vessel.multiplier)
-        }
+    private func reapplyEstimateFromCurrentSelections() {
+        let carbWeight = max(0, carbPercent) / 100.0
+        let proteinWeight = max(0, proteinPercent) / 100.0
+        let vegWeight = max(0, vegPercent) / 100.0
 
-        // Apply Add-ons (if any selected)
+        let carbBase = carbComponentMacros(for: carbType)
+        let proteinBase = proteinComponentMacros(for: proteinType)
+        let vegBase = vegComponentMacros(for: vegType)
+
+        var adjusted = Macros(
+            k: 0,
+            c: (carbBase.c * carbWeight) + (proteinBase.c * proteinWeight) + (vegBase.c * vegWeight),
+            p: (carbBase.p * carbWeight) + (proteinBase.p * proteinWeight) + (vegBase.p * vegWeight),
+            f: (carbBase.f * carbWeight) + (proteinBase.f * proteinWeight) + (vegBase.f * vegWeight),
+            fi: (carbBase.fi * carbWeight) + (proteinBase.fi * proteinWeight) + (vegBase.fi * vegWeight)
+        )
+
+        adjusted = adjusted.scaled(by: portionSize.multiplier)
+
         if !addOns.isEmpty {
-            let mul = addOns.reduce(1.0) { $0 * $1.multiplier }
-            adjusted = adjusted.scaled(by: mul)
+            let addOnMultiplier = addOns.reduce(1.0) { $0 * $1.multiplier }
+            adjusted = adjusted.scaled(by: addOnMultiplier)
         }
 
-        // NEW: apply lighter / about right / richer
-        adjusted = adjusted.scaled(by: richnessAdjustment)
+        adjusted = adjusted.scaled(by: estimateAdjustment.multiplier)
+        adjusted.k = (adjusted.c * 4) + (adjusted.p * 4) + (adjusted.f * 9)
 
         fill(adjusted)
     }
 
+    private func suggestedMeal(from label: String) -> String {
+        let lower = label.lowercased()
+
+        if lower.contains("pizza") { return "Pizza" }
+        if lower.contains("burger") { return "Burger and fries" }
+        if lower.contains("pasta") || lower.contains("spaghetti") { return "Pasta dish" }
+        if lower.contains("noodle") { return "Noodle dish" }
+        if lower.contains("rice") { return "Rice dish" }
+        if lower.contains("curry") { return "Curry and rice" }
+        if lower.contains("salad") { return "Salad bowl" }
+        if lower.contains("sandwich") || lower.contains("wrap") { return "Sandwich or wrap" }
+        if lower.contains("stew") || lower.contains("chilli") || lower.contains("chili") { return "Stew or chilli" }
+        return "Your plate"
+    }
+
+    private func carbComponentMacros(for type: CarbType) -> Macros {
+        switch type {
+        case .rice:
+            return Macros(k: 0, c: 90, p: 8, f: 2, fi: 3)
+        case .pasta:
+            return Macros(k: 0, c: 95, p: 14, f: 3, fi: 5)
+        case .bread:
+            return Macros(k: 0, c: 85, p: 16, f: 5, fi: 6)
+        case .potatoes:
+            return Macros(k: 0, c: 70, p: 8, f: 1, fi: 8)
+        case .noodles:
+            return Macros(k: 0, c: 90, p: 12, f: 4, fi: 4)
+        case .other:
+            return Macros(k: 0, c: 80, p: 10, f: 3, fi: 5)
+        }
+    }
+
+    private func proteinComponentMacros(for type: ProteinType) -> Macros {
+        switch type {
+        case .chicken:
+            return Macros(k: 0, c: 0, p: 55, f: 12, fi: 0)
+        case .fish:
+            return Macros(k: 0, c: 0, p: 45, f: 14, fi: 0)
+        case .beef:
+            return Macros(k: 0, c: 0, p: 45, f: 22, fi: 0)
+        case .pork:
+            return Macros(k: 0, c: 0, p: 42, f: 24, fi: 0)
+        case .eggs:
+            return Macros(k: 0, c: 3, p: 30, f: 24, fi: 0)
+        case .beansTofu:
+            return Macros(k: 0, c: 20, p: 30, f: 14, fi: 10)
+        case .other:
+            return Macros(k: 0, c: 5, p: 35, f: 16, fi: 3)
+        }
+    }
+
+    private func vegComponentMacros(for type: VegType) -> Macros {
+        switch type {
+        case .mixedVeg:
+            return Macros(k: 0, c: 18, p: 6, f: 1, fi: 8)
+        case .leafyVeg:
+            return Macros(k: 0, c: 10, p: 6, f: 1, fi: 7)
+        case .rootVeg:
+            return Macros(k: 0, c: 28, p: 5, f: 1, fi: 10)
+        case .salad:
+            return Macros(k: 0, c: 8, p: 4, f: 1, fi: 5)
+        case .none:
+            return Macros(k: 0, c: 0, p: 0, f: 0, fi: 0)
+        case .other:
+            return Macros(k: 0, c: 15, p: 5, f: 1, fi: 7)
+        }
+    }
     private func fill(_ m: Macros) {
+        isProgrammaticMacroFill = true
         userLockedMacros = false
         kcal = "\(Int(m.k.rounded()))"
         carbs = "\(Int(m.c.rounded()))"
         protein = "\(Int(m.p.rounded()))"
         fat = "\(Int(m.f.rounded()))"
         fibre = "\(Int(m.fi.rounded()))"
-    }
-
-    // MARK: - Save
-
-    private var canSave: Bool {
-        let k = Double(kcal) ?? 0
-        let c = Double(carbs) ?? 0
-        let p = Double(protein) ?? 0
-        let f = Double(fat) ?? 0
-        return (k > 0) || (c + p + f > 0)
+        DispatchQueue.main.async {
+            isProgrammaticMacroFill = false
+        }
     }
 
     private func numberField(_ label: String, text: Binding<String>) -> some View {
@@ -541,49 +798,7 @@ struct AddPlateSheet: View {
             .keyboardType(.decimalPad)
     }
 
-    private func ensureDay(for date: Date) -> Day {
-        let start = Day.startOfDay(for: date)
-
-        let all = (try? ctx.fetch(FetchDescriptor<Day>())) ?? []
-        if let existing = all.first(where: { Day.startOfDay(for: $0.date) == start }) {
-            return existing
-        }
-
-        let newDay = Day(date: start)
-        ctx.insert(newDay)
-        return newDay
-    }
-
-    private func save() {
-        let safeTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let finalTitle = safeTitle.isEmpty ? "Your plate" : safeTitle
-
-        let targetDay = ensureDay(for: when)
-
-        let entry = Entry(
-            title: finalTitle,
-            mealSlot: mealSlot,
-            carbsG: Double(carbs) ?? 0,
-            proteinG: Double(protein) ?? 0,
-            fatG: Double(fat) ?? 0,
-            fibreG: Double(fibre) ?? 0,
-            caloriesKcal: Double(kcal) ?? 0,
-            isEstimate: true,
-            day: targetDay
-        )
-
-        entry.createdAt = when
-        ctx.insert(entry)
-
-        targetDay.hasEstimates = true
-        try? ctx.save()
-
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-
-        dismiss()
-    }
-
-    // MARK: - Persistence helpers (Add-ons)
+        // MARK: - Persistence helpers (Add-ons)
 
     private func decodeAddOns(_ raw: String) -> Set<RichAddOn> {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -597,32 +812,6 @@ struct AddPlateSheet: View {
     }
 }
 
-// MARK: - Vessel (B1 nudges)
-
-private enum Vessel: String, CaseIterable, Identifiable {
-    case smallPlate
-    case largePlate
-    case bowl
-
-    var id: String { rawValue }
-
-    var display: String {
-        switch self {
-        case .smallPlate: return "Small plate"
-        case .largePlate: return "Large plate"
-        case .bowl:       return "Bowl"
-        }
-    }
-
-    /// Deterministic multiplier on the baseline estimate.
-    var multiplier: Double {
-        switch self {
-        case .smallPlate: return 0.90
-        case .largePlate: return 1.15
-        case .bowl:       return 1.05
-        }
-    }
-}
 
 // MARK: - Rich add-ons (B1 nudges)
 
@@ -657,66 +846,6 @@ private enum RichAddOn: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Plate mix
-
-private enum PlateMix: String, CaseIterable, Identifiable {
-    case balanced
-    case carbProtein
-    case mostlyCarb
-    case mostlyProtein
-    case dessertSnack
-
-    var id: String { rawValue }
-
-    var display: String {
-        switch self {
-        case .balanced:      return "Mixed"
-        case .carbProtein:   return "Carb + Protein"
-        case .mostlyCarb:    return "Mostly carb"
-        case .mostlyProtein: return "Mostly protein"
-        case .dessertSnack:  return "Dessert"
-        }
-    }
-
-    func apply(to base: Macros) -> Macros {
-        switch self {
-        case .balanced:
-            return base
-        case .carbProtein:
-            return Macros(
-                k: base.k * 1.08,
-                c: base.c * 1.02,
-                p: base.p * 1.18,
-                f: base.f * 1.05,
-                fi: max(2, base.fi - 1)
-            )
-        case .mostlyCarb:
-            return Macros(
-                k: base.k * 1.05,
-                c: base.c * 1.25,
-                p: base.p * 0.80,
-                f: base.f * 0.95,
-                fi: base.fi
-            )
-        case .mostlyProtein:
-            return Macros(
-                k: base.k * 1.05,
-                c: base.c * 0.70,
-                p: base.p * 1.35,
-                f: base.f * 1.10,
-                fi: base.fi
-            )
-        case .dessertSnack:
-            return Macros(
-                k: base.k * 0.75,
-                c: base.c * 1.10,
-                p: max(2, base.p * 0.55),
-                f: base.f * 1.10,
-                fi: max(1, base.fi * 0.6)
-            )
-        }
-    }
-}
 
 private struct Macros {
     var k: Double
