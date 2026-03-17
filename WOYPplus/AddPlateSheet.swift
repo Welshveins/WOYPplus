@@ -54,6 +54,8 @@ struct AddPlateSheet: View {
     // Stop overwriting once user edits
     @State private var userLockedMacros = false
     @State private var isProgrammaticMacroFill = false
+    @State private var macroRefreshPulse = false
+    @State private var savePulse = false
     
     // MARK: - New Your Plate enums
 
@@ -176,80 +178,115 @@ struct AddPlateSheet: View {
         }
     }
 
-    var body: some View {
-        NavigationStack {
-            contentForm
-                .navigationTitle("Your plate")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { toolbarContent }
-                .sheet(isPresented: $showingCamera) {
-                    CameraPicker { image in
-                        uiImage = image
-                        runVision(on: image)
-                    }
-                }
-        }
-        .onAppear {
-            mealSlot = MealSlot.defaultSlot(for: when)
-            addOns = decodeAddOns(addOnsRaw)
-            if suggestedMealName.isEmpty {
-                suggestedMealName = title
-            }
-        }
-        .onChange(of: addOns) { _, newValue in
-            addOnsRaw = encodeAddOns(newValue)
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: portionSize) { _, _ in
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: carbType) { _, _ in
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: proteinType) { _, _ in
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: vegType) { _, _ in
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: carbPercent) { _, _ in
-            balanceComposition(changed: .carb)
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: proteinPercent) { _, _ in
-            balanceComposition(changed: .protein)
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: vegPercent) { _, _ in
-            balanceComposition(changed: .veg)
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: estimateAdjustment) { _, _ in
-            guard !userLockedMacros else { return }
-            reapplyEstimateFromCurrentSelections()
-        }
-        .onChange(of: when) { _, newValue in
-            guard !userManuallyPickedSlot else { return }
-            mealSlot = MealSlot.defaultSlot(for: newValue)
-        }
-        .onChange(of: selectedPhotoItem) { _, newItem in
-            loadImage(newItem)
-        }
-        .onChange(of: kcal) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
-        .onChange(of: carbs) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
-        .onChange(of: protein) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
-        .onChange(of: fat) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
-        .onChange(of: fibre) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+    private func lightTapHaptic() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
     }
 
+    var body: some View {
+        observedContent
+    }
+
+    private var observedContent: some View {
+        baseView
+    }
+
+    private var baseView: some View {
+        observedMacroView
+    }
+
+    private var navigationBaseView: some View {
+        NavigationStack {
+            presentedContent
+        }
+    }
+
+    private var observedPrimaryView: some View {
+        navigationBaseView
+            .onAppear {
+                mealSlot = MealSlot.defaultSlot(for: when)
+                addOns = decodeAddOns(addOnsRaw)
+                if suggestedMealName.isEmpty {
+                    suggestedMealName = title
+                }
+            }
+            .onChange(of: addOns) { _, newValue in
+                addOnsRaw = encodeAddOns(newValue)
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: portionSize) { _, _ in
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: carbType) { _, _ in
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: proteinType) { _, _ in
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: vegType) { _, _ in
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: carbPercent) { _, _ in
+                balanceComposition(changed: .carb)
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: proteinPercent) { _, _ in
+                balanceComposition(changed: .protein)
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: vegPercent) { _, _ in
+                balanceComposition(changed: .veg)
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: estimateAdjustment) { _, _ in
+                guard !userLockedMacros else { return }
+                reapplyEstimateFromCurrentSelections()
+            }
+            .onChange(of: when) { _, newValue in
+                guard !userManuallyPickedSlot else { return }
+                mealSlot = MealSlot.defaultSlot(for: newValue)
+            }
+            .onChange(of: selectedPhotoItem) { _, newItem in
+                loadImage(newItem)
+            }
+    }
+
+    private var observedMacroView: some View {
+        observedPrimaryView
+            .onChange(of: kcal) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+            .onChange(of: carbs) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+            .onChange(of: protein) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+            .onChange(of: fat) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+            .onChange(of: fibre) { _, _ in if !isProgrammaticMacroFill { userLockedMacros = true } }
+            .onChange(of: canSave) { _, newValue in
+                guard newValue else { return }
+                savePulse = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    savePulse = false
+                }
+            }
+    }
+
+    private var presentedContent: some View {
+        contentForm
+            .navigationTitle("Your plate")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
+            .sheet(isPresented: $showingCamera) {
+                CameraPicker { image in
+                    uiImage = image
+                    runVision(on: image)
+                }
+            }
+    }
     private var contentForm: some View {
         Form {
             photoSection
@@ -403,45 +440,10 @@ struct AddPlateSheet: View {
     }
 
     private var modifiersGrid: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8)
-            ],
-            spacing: 8
-        ) {
-            ForEach(RichAddOn.allCases) { addOn in
-                let isSelected = addOns.contains(addOn)
-
-                Button {
-                    if isSelected {
-                        addOns.remove(addOn)
-                    } else {
-                        addOns.insert(addOn)
-                    }
-                } label: {
-                    Text(addOn.display)
-                        .font(.system(size: 13, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(isSelected
-                                      ? Color.woypTeal.opacity(0.12)
-                                      : Color.woypSlate.opacity(0.07))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
+        ModifierChipGrid(
+            addOns: $addOns,
+            onTap: lightTapHaptic
+        )
     }
 
     private func horizontalPickerRow<Option: Identifiable & CaseIterable & Hashable>(
@@ -449,40 +451,12 @@ struct AddPlateSheet: View {
         options: Option.AllCases,
         selection: Binding<Option>
     ) -> some View where Option: CustomStringConvertible {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Array(options), id: \.id) { option in
-                        let isSelected = selection.wrappedValue == option
-
-                        Button {
-                            selection.wrappedValue = option
-                        } label: {
-                            Text(option.description)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 12)
-                                .background(
-                                    Capsule()
-                                        .fill(isSelected
-                                              ? Color.woypTeal.opacity(0.12)
-                                              : Color.woypSlate.opacity(0.07))
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
+        PickerChipRow(
+            title: title,
+            options: Array(options),
+            selection: selection,
+            onTap: lightTapHaptic
+        )
     }
 
     private func percentageRow(title: String, value: Binding<Double>) -> some View {
@@ -501,31 +475,22 @@ struct AddPlateSheet: View {
 
     private var macrosSection: some View {
         Section("Best guess") {
-
-            if userLockedMacros {
-                HStack {
-                    Image(systemName: "lock.fill")
-                        .foregroundStyle(.secondary)
-                    Text("Your edits are locked (Vision won’t overwrite).")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+            MacroEstimateBlock(
+                userLockedMacros: userLockedMacros,
+                lastVisionIdentifier: lastVisionIdentifier,
+                kcal: $kcal,
+                carbs: $carbs,
+                protein: $protein,
+                fat: $fat,
+                fibre: $fibre,
+                macroRefreshPulse: macroRefreshPulse,
+                onReapply: {
+                    if let id = lastVisionIdentifier {
+                        userLockedMacros = false
+                        applyHeuristic(for: id)
+                    }
                 }
-            }
-
-            numberField("kcal", text: $kcal)
-            numberField("Carbs (g)", text: $carbs)
-            numberField("Protein (g)", text: $protein)
-            numberField("Fat (g)", text: $fat)
-            numberField("Fibre (g)", text: $fibre)
-
-            if let id = lastVisionIdentifier {
-                Button {
-                    userLockedMacros = false
-                    applyHeuristic(for: id)
-                } label: {
-                    Label("Re-apply estimate", systemImage: "wand.and.stars")
-                }
-            }
+            )
         }
     }
 
@@ -540,7 +505,7 @@ struct AddPlateSheet: View {
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
-
+    
     private func save() {
         let entry = Entry(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -570,6 +535,8 @@ struct AddPlateSheet: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }
                     .disabled(!canSave)
+                    .opacity(canSave ? (savePulse ? 0.7 : 1.0) : 0.4)
+                    .animation(.easeInOut(duration: 0.2), value: savePulse)
             }
         }
     }
@@ -783,19 +750,166 @@ struct AddPlateSheet: View {
     private func fill(_ m: Macros) {
         isProgrammaticMacroFill = true
         userLockedMacros = false
-        kcal = "\(Int(m.k.rounded()))"
-        carbs = "\(Int(m.c.rounded()))"
-        protein = "\(Int(m.p.rounded()))"
-        fat = "\(Int(m.f.rounded()))"
-        fibre = "\(Int(m.fi.rounded()))"
-        DispatchQueue.main.async {
+
+        withAnimation(.easeInOut(duration: 0.16)) {
+            macroRefreshPulse = true
+            kcal = "\(Int(m.k.rounded()))"
+            carbs = "\(Int(m.c.rounded()))"
+            protein = "\(Int(m.p.rounded()))"
+            fat = "\(Int(m.f.rounded()))"
+            fibre = "\(Int(m.fi.rounded()))"
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            macroRefreshPulse = false
             isProgrammaticMacroFill = false
         }
     }
 
-    private func numberField(_ label: String, text: Binding<String>) -> some View {
-        TextField(label, text: text)
-            .keyboardType(.decimalPad)
+    
+
+
+    private struct ModifierChipGrid: View {
+        @Binding var addOns: Set<RichAddOn>
+        let onTap: () -> Void
+
+        var body: some View {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8)
+                ],
+                spacing: 8
+            ) {
+                ForEach(RichAddOn.allCases) { addOn in
+                    let isSelected = addOns.contains(addOn)
+
+                    Button {
+                        onTap()
+                        if isSelected {
+                            addOns.remove(addOn)
+                        } else {
+                            addOns.insert(addOn)
+                        }
+                    } label: {
+                        Text(addOn.display)
+                            .font(.system(size: 13, weight: .semibold))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(isSelected
+                                          ? Color.woypTeal.opacity(0.12)
+                                          : Color.woypSlate.opacity(0.07))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private struct PickerChipRow<Option: Identifiable & Hashable & CustomStringConvertible>: View {
+        let title: String
+        let options: [Option]
+        @Binding var selection: Option
+        let onTap: () -> Void
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(options, id: \.id) { option in
+                            let isSelected = selection == option
+
+                            Button {
+                                onTap()
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    selection = option
+                                }
+                            } label: {
+                                Text(option.description)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 12)
+                                    .background(
+                                        Capsule()
+                                            .fill(isSelected
+                                                  ? Color.woypTeal.opacity(0.16)
+                                                  : Color.woypSlate.opacity(0.07))
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.white.opacity(isSelected ? 0.22 : 0.10), lineWidth: 1)
+                                    )
+                                    .scaleEffect(isSelected ? 1.04 : 1.0)
+                                    .animation(.easeInOut(duration: 0.15), value: isSelected)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private struct MacroEstimateBlock: View {
+        let userLockedMacros: Bool
+        let lastVisionIdentifier: String?
+        @Binding var kcal: String
+        @Binding var carbs: String
+        @Binding var protein: String
+        @Binding var fat: String
+        @Binding var fibre: String
+        let macroRefreshPulse: Bool
+        let onReapply: () -> Void
+
+        var body: some View {
+            VStack(spacing: 12) {
+                if userLockedMacros {
+                    HStack {
+                        Image(systemName: "lock.fill")
+                            .foregroundStyle(.secondary)
+                        Text("Your edits are locked (Vision won’t overwrite).")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                macroField("kcal", text: $kcal)
+                macroField("Carbs (g)", text: $carbs)
+                macroField("Protein (g)", text: $protein)
+                macroField("Fat (g)", text: $fat)
+                macroField("Fibre (g)", text: $fibre)
+
+                if lastVisionIdentifier != nil {
+                    Button(action: onReapply) {
+                        Label("Re-apply estimate", systemImage: "wand.and.stars")
+                    }
+                }
+            }
+            .opacity(macroRefreshPulse ? 0.72 : 1.0)
+            .scaleEffect(macroRefreshPulse ? 0.992 : 1.0)
+            .animation(.easeInOut(duration: 0.16), value: macroRefreshPulse)
+        }
+
+        private func macroField(_ label: String, text: Binding<String>) -> some View {
+            TextField(label, text: text)
+                .keyboardType(.decimalPad)
+        }
     }
 
         // MARK: - Persistence helpers (Add-ons)
@@ -813,57 +927,6 @@ struct AddPlateSheet: View {
 }
 
 
-// MARK: - Rich add-ons (B1 nudges)
-
-private enum RichAddOn: String, CaseIterable, Identifiable {
-    case oil
-    case cream
-    case cheese
-    case sauceHeavy
-    case nuts
-
-    var id: String { rawValue }
-
-    var display: String {
-        switch self {
-        case .oil:        return "Oil"
-        case .cream:      return "Cream"
-        case .cheese:     return "Cheese"
-        case .sauceHeavy: return "Sauce-heavy"
-        case .nuts:       return "Nuts"
-        }
-    }
-
-    /// Deterministic multipliers (applied cumulatively).
-    var multiplier: Double {
-        switch self {
-        case .oil:        return 1.08
-        case .cream:      return 1.07
-        case .cheese:     return 1.06
-        case .sauceHeavy: return 1.10
-        case .nuts:       return 1.08
-        }
-    }
-}
-
-
-private struct Macros {
-    var k: Double
-    var c: Double
-    var p: Double
-    var f: Double
-    var fi: Double
-
-    func scaled(by m: Double) -> Macros {
-        Macros(
-            k: k * m,
-            c: c * m,
-            p: p * m,
-            f: f * m,
-            fi: max(0, fi * m)
-        )
-    }
-}
 
 // MARK: - Camera (real device)
 
