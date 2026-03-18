@@ -291,14 +291,18 @@ struct AddPlateSheet: View {
         Form {
             photoSection
             suggestedMealSection
+
+            portionSizeSection
             foodTypeSection
             compositionSection
-            portionSizeSection
+
+            estimateAdjustmentSection
+            modifiersSection
+            macrosSection
+
             whenSection
             mealSection
-            modifiersSection
-            estimateAdjustmentSection
-            macrosSection
+
             infoSection
         }
     }
@@ -370,7 +374,7 @@ struct AddPlateSheet: View {
     }
 
     private var foodTypeSection: some View {
-        Section("What is on the plate?") {
+        Section("Plate contents") {
             horizontalPickerRow(title: "Carb", options: CarbType.allCases, selection: $carbType)
             horizontalPickerRow(title: "Protein", options: ProteinType.allCases, selection: $proteinType)
             horizontalPickerRow(title: "Veg", options: VegType.allCases, selection: $vegType)
@@ -387,18 +391,18 @@ struct AddPlateSheet: View {
 
     private var modifiersSection: some View {
         Section("Optional richness") {
-            modifiersGrid
+            ModifierChipGrid(selected: $addOns)
         }
     }
 
     private var estimateAdjustmentSection: some View {
         Section("Estimate") {
-            Picker("Estimate", selection: $estimateAdjustment) {
-                ForEach(EstimateAdjustment.allCases) { item in
-                    Text(item.display).tag(item)
-                }
-            }
-            .pickerStyle(.segmented)
+            PickerChipRow(
+                title: "Adjustment",
+                options: Array(EstimateAdjustment.allCases),
+                selection: $estimateAdjustment,
+                onTap: lightTapHaptic
+            )
         }
     }
 
@@ -439,12 +443,6 @@ struct AddPlateSheet: View {
         )
     }
 
-    private var modifiersGrid: some View {
-        ModifierChipGrid(
-            addOns: $addOns,
-            onTap: lightTapHaptic
-        )
-    }
 
     private func horizontalPickerRow<Option: Identifiable & CaseIterable & Hashable>(
         title: String,
@@ -460,17 +458,29 @@ struct AddPlateSheet: View {
     }
 
     private func percentageRow(title: String, value: Binding<Double>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
+                    .font(.subheadline.weight(.medium))
+
                 Spacer()
+
                 Text("\(Int(value.wrappedValue.rounded()))%")
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline.weight(.semibold))
                     .monospacedDigit()
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.woypSlate.opacity(0.10))
+                    )
             }
 
             Slider(value: value, in: 0...100, step: 5)
+                .tint(Color.woypTeal)
         }
+        .padding(.vertical, 4)
     }
 
     private var macrosSection: some View {
@@ -535,8 +545,16 @@ struct AddPlateSheet: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }
                     .disabled(!canSave)
-                    .opacity(canSave ? (savePulse ? 0.7 : 1.0) : 0.4)
-                    .animation(.easeInOut(duration: 0.2), value: savePulse)
+                    .font(.system(size: 16, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(canSave ? Color.woypTeal.opacity(0.15) : Color.clear)
+                    )
+                    .foregroundStyle(canSave ? Color.woypTeal : Color.secondary)
+                    .scaleEffect(savePulse ? 1.05 : 1.0)
+                    .animation(.easeInOut(duration: 0.18), value: savePulse)
             }
         }
     }
@@ -766,151 +784,8 @@ struct AddPlateSheet: View {
         }
     }
 
-    
 
-
-    private struct ModifierChipGrid: View {
-        @Binding var addOns: Set<RichAddOn>
-        let onTap: () -> Void
-
-        var body: some View {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 8),
-                    GridItem(.flexible(), spacing: 8)
-                ],
-                spacing: 8
-            ) {
-                ForEach(RichAddOn.allCases) { addOn in
-                    let isSelected = addOns.contains(addOn)
-
-                    Button {
-                        onTap()
-                        if isSelected {
-                            addOns.remove(addOn)
-                        } else {
-                            addOns.insert(addOn)
-                        }
-                    } label: {
-                        Text(addOn.display)
-                            .font(.system(size: 13, weight: .semibold))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(isSelected
-                                          ? Color.woypTeal.opacity(0.12)
-                                          : Color.woypSlate.opacity(0.07))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.white.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private struct PickerChipRow<Option: Identifiable & Hashable & CustomStringConvertible>: View {
-        let title: String
-        let options: [Option]
-        @Binding var selection: Option
-        let onTap: () -> Void
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(options, id: \.id) { option in
-                            let isSelected = selection == option
-
-                            Button {
-                                onTap()
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    selection = option
-                                }
-                            } label: {
-                                Text(option.description)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(isSelected ? Color.woypTeal : Color.primary)
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 12)
-                                    .background(
-                                        Capsule()
-                                            .fill(isSelected
-                                                  ? Color.woypTeal.opacity(0.16)
-                                                  : Color.woypSlate.opacity(0.07))
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color.white.opacity(isSelected ? 0.22 : 0.10), lineWidth: 1)
-                                    )
-                                    .scaleEffect(isSelected ? 1.04 : 1.0)
-                                    .animation(.easeInOut(duration: 0.15), value: isSelected)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private struct MacroEstimateBlock: View {
-        let userLockedMacros: Bool
-        let lastVisionIdentifier: String?
-        @Binding var kcal: String
-        @Binding var carbs: String
-        @Binding var protein: String
-        @Binding var fat: String
-        @Binding var fibre: String
-        let macroRefreshPulse: Bool
-        let onReapply: () -> Void
-
-        var body: some View {
-            VStack(spacing: 12) {
-                if userLockedMacros {
-                    HStack {
-                        Image(systemName: "lock.fill")
-                            .foregroundStyle(.secondary)
-                        Text("Your edits are locked (Vision won’t overwrite).")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                macroField("kcal", text: $kcal)
-                macroField("Carbs (g)", text: $carbs)
-                macroField("Protein (g)", text: $protein)
-                macroField("Fat (g)", text: $fat)
-                macroField("Fibre (g)", text: $fibre)
-
-                if lastVisionIdentifier != nil {
-                    Button(action: onReapply) {
-                        Label("Re-apply estimate", systemImage: "wand.and.stars")
-                    }
-                }
-            }
-            .opacity(macroRefreshPulse ? 0.72 : 1.0)
-            .scaleEffect(macroRefreshPulse ? 0.992 : 1.0)
-            .animation(.easeInOut(duration: 0.16), value: macroRefreshPulse)
-        }
-
-        private func macroField(_ label: String, text: Binding<String>) -> some View {
-            TextField(label, text: text)
-                .keyboardType(.decimalPad)
-        }
-    }
+   
 
         // MARK: - Persistence helpers (Add-ons)
 

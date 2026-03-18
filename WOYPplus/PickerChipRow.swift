@@ -1,29 +1,38 @@
 import SwiftUI
 
-struct PickerChipRow<T: Hashable & Identifiable>: View {
+struct PickerChipRow<Option: Hashable & Identifiable & CustomStringConvertible>: View {
 
-    let items: [T]
-    @Binding var selection: T
-    let label: (T) -> String
+    let title: String
+    let options: [Option]
+    @Binding var selection: Option
+    let onTap: () -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(items) { item in
-                    chip(for: item)
+        VStack(alignment: .leading, spacing: 6) {
+
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(options) { option in
+                        chip(for: option)
+                    }
                 }
+                .padding(.vertical, 2)
             }
-            .padding(.vertical, 2)
         }
     }
 
-    private func chip(for item: T) -> some View {
-        let isSelected = item == selection
+    private func chip(for option: Option) -> some View {
+        let isSelected = option == selection
 
         return Button {
-            selection = item
+            selection = option
+            onTap()
         } label: {
-            Text(label(item))
+            Text(option.description)
                 .font(.footnote.weight(.medium))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
